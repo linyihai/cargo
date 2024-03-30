@@ -59,4 +59,9 @@ impl CrateSpec {
     pub fn version_req(&self) -> Option<&str> {
         self.version_req.as_deref()
     }
+
+    pub fn set_version_req(&mut self, ver: &semver::Version) -> &mut Self {
+        self.version_req = Some(ver.to_string());
+        self
+    }
 }

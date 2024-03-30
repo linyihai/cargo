@@ -22,6 +22,7 @@ use crate::core::registry::PackageRegistry;
 use crate::core::FeatureValue;
 use crate::core::Package;
 use crate::core::Registry;
+use crate::core::Resolve;
 use crate::core::Shell;
 use crate::core::Summary;
 use crate::core::Workspace;
@@ -59,7 +60,11 @@ pub struct AddOptions<'a> {
 }
 
 /// Add dependencies to a manifest
-pub fn add(workspace: &Workspace<'_>, options: &AddOptions<'_>) -> CargoResult<()> {
+pub fn add(
+    workspace: &Workspace<'_>,
+    resolver: &Resolve,
+    options: &AddOptions<'_>,
+) -> CargoResult<()> {
     let dep_table = options
         .section
         .to_table()
@@ -93,6 +98,7 @@ pub fn add(workspace: &Workspace<'_>, options: &AddOptions<'_>) -> CargoResult<(
                     &manifest,
                     raw,
                     workspace,
+                    resolver,
                     &options.spec,
                     &options.section,
                     options.honor_rust_version,
@@ -286,6 +292,7 @@ fn resolve_dependency(
     manifest: &LocalManifest,
     arg: &DepOp,
     ws: &Workspace<'_>,
+    resolver: &Resolve,
     spec: &Package,
     section: &DepTable,
     honor_rust_version: bool,
@@ -357,7 +364,20 @@ fn resolve_dependency(
             Dependency::from(package.summary())
         };
         selected
-    } else if let Some(crate_spec) = &crate_spec {
+    } else if let Some(crate_spec) = crate_spec {
+        let mut crate_spec = crate_spec;
+        if crate_spec.version_req().is_none() {
+            if let Ok(dep) = resolver.query(&crate_spec.name()) {
+                if resolver
+                    .iter()
+                    .any(|parent_pkg| resolver.is_public_dep(parent_pkg, dep))
+                {
+                    // if version isn't specified, then try to version aligned with the dependency 
+                    // that is public and transitive.
+                    crate_spec.set_version_req(dep.version());
+                };
+            };
+        }
         crate_spec.to_dependency()?
     } else {
         anyhow::bail!("dependency name is required");

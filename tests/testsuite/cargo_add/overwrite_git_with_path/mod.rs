@@ -1,38 +1,48 @@
+use cargo_test_support::basic_manifest;
 use cargo_test_support::compare::assert_ui;
 use cargo_test_support::current_dir;
 use cargo_test_support::file;
+use cargo_test_support::git;
 use cargo_test_support::prelude::*;
+use cargo_test_support::project;
 use cargo_test_support::str;
-use cargo_test_support::Project;
 
 #[cargo_test]
 fn case() {
     cargo_test_support::registry::init();
-    for ver in [
-        "0.1.1+my-package",
-        "0.2.0+my-package",
-        "0.2.3+my-package",
-        "0.4.1+my-package",
-        "20.0.0+my-package",
-        "99999.0.0+my-package",
-        "99999.0.0-alpha.1+my-package",
-    ] {
-        cargo_test_support::registry::Package::new("cargo-list-test-fixture-dependency", ver)
-            .publish();
-    }
-
-    let project = Project::from_template(current_dir!().join("in"));
-    let project_root = project.root();
-    let cwd = project_root.join("primary");
+    let git_dependnecy = git::new("dependency", |project| {
+        project
+            .file("Cargo.toml", &basic_manifest("cargo-list-test-fixture-dependency", "0.0.0"))
+            .file("src/lib.rs", "")
+    })
+    .url();
+    let in_project = project()
+        .file(
+            "Cargo.toml",
+            &format!(
+                "[workspace]\n\
+                 \n\
+                 [package]\n\
+                 name = \"cargo-list-test-fixture\"\n\
+                 version = \"0.0.0\"\n\
+                 edition = \"2015\"\n\
+                 \n\
+                 [dependencies]\n\
+                 cargo-list-test-fixture-dependency = {{ git = \"{git_dependnecy}\", optional = true }}\n\
+                 ",
+            ),
+        )
+        .file("src/lib.rs", "")
+        .build();
 
     snapbox::cmd::Command::cargo_ui()
         .arg("add")
         .arg_line("cargo-list-test-fixture-dependency --path ../dependency")
-        .current_dir(&cwd)
+        .current_dir(&in_project.root())
         .assert()
         .success()
         .stdout_matches(str![""])
         .stderr_matches(file!["stderr.term.svg"]);
 
-    assert_ui().subset_matches(current_dir!().join("out"), &project_root);
+    assert_ui().subset_matches(current_dir!().join("out/primary"), &in_project.root());
 }

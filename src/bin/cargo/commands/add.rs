@@ -224,7 +224,8 @@ pub fn exec(gctx: &mut GlobalContext, args: &ArgMatches) -> CliResult {
         dry_run,
         honor_rust_version,
     };
-    add(&ws, &options)?;
+    let (_, resolve) = resolve_ws(&ws)?;
+    add(&ws, &resolve, &options)?;
 
     if !dry_run {
         // Reload the workspace since we've changed dependencies
