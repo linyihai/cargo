@@ -1801,3 +1801,51 @@ fn trim_paths_parsing() {
     let trim_paths: TomlTrimPaths = gctx.get("profile.dev.trim-paths").unwrap();
     assert_eq!(trim_paths, expected, "failed to parse {val}");
 }
+
+#[cargo_test]
+fn git_features_env() {
+    let gctx = GlobalContextBuilder::new()
+        .env("CARGO_UNSTABLE_GIT", "true")
+        .build();
+    verify(gctx);
+
+    write_config_toml(
+        "\
+    [unstable.git]
+    ",
+    );
+    let gctx = GlobalContextBuilder::new().build();
+    verify(gctx);
+
+    fn verify(gctx: GlobalContext) {
+        assert_error(
+            gctx.get::<Option<cargo::core::CliUnstable>>("unstable")
+                .unwrap_err(),
+            "missing field `shallow_index`",
+        );
+    }
+}
+
+#[cargo_test]
+fn gitoxide_features_env() {
+    let gctx = GlobalContextBuilder::new()
+        .env("CARGO_UNSTABLE_GITOXIDE", "true")
+        .build();
+    verify(gctx);
+
+    write_config_toml(
+        "\
+    [unstable.gitoxide]
+    ",
+    );
+    let gctx = GlobalContextBuilder::new().build();
+    verify(gctx);
+
+    fn verify(gctx: GlobalContext) {
+        assert_error(
+            gctx.get::<Option<cargo::core::CliUnstable>>("unstable")
+                .unwrap_err(),
+            "missing field `fetch`",
+        );
+    }
+}
