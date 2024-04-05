@@ -759,7 +759,9 @@ unstable_cli_options!(
     dual_proc_macros: bool = ("Build proc-macros for both the host and the target"),
     features: Option<Vec<String>>,
     gc: bool = ("Track cache usage and \"garbage collect\" unused files"),
+    #[serde(deserialize_with = "deserialize_git_features")]
     git: Option<GitFeatures> = ("Enable support for shallow git fetch operations"),
+    #[serde(deserialize_with = "deserialize_gitoxide_features")]
     gitoxide: Option<GitoxideFeatures> = ("Use gitoxide for the given git interactions, or all of them if no argument is given"),
     host_config: bool = ("Enable the `[host]` section in the .cargo/config.toml file"),
     minimal_versions: bool = ("Resolve minimal dependency versions instead of maximum"),
@@ -867,7 +869,7 @@ where
     ))
 }
 
-#[derive(Debug, Copy, Clone, Default, Deserialize)]
+#[derive(Debug, Copy, Clone, Default, Deserialize, Ord, PartialOrd, Eq, PartialEq)]
 pub struct GitFeatures {
     /// When cloning the index, perform a shallow clone. Maintain shallowness upon subsequent fetches.
     pub shallow_index: bool,
@@ -876,12 +878,62 @@ pub struct GitFeatures {
 }
 
 impl GitFeatures {
-    fn all() -> Self {
+    pub fn all() -> Self {
         GitFeatures {
             shallow_index: true,
             shallow_deps: true,
         }
     }
+}
+
+fn deserialize_git_features<'de, D>(deserializer: D) -> Result<Option<GitFeatures>, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    struct GitFeaturesVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for GitFeaturesVisitor {
+        type Value = Option<GitFeatures>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("a comma-separated list of git features")
+        }
+
+        fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(parse_git(s.split(",")).map_err(serde::de::Error::custom)?)
+        }
+
+        fn visit_bool<E>(self, s: bool) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            if s {
+                Ok(Some(GitFeatures::all()))
+            } else {
+                Ok(None)
+            }
+        }
+
+        fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+        where
+            D: serde::de::Deserializer<'de>,
+        {
+            deserializer.deserialize_any(self)
+        }
+
+        fn visit_map<V>(self, map: V) -> Result<Self::Value, V::Error>
+        where
+            V: serde::de::MapAccess<'de>,
+        {
+            let mvd = serde::de::value::MapAccessDeserializer::new(map);
+            Ok(Some(GitFeatures::deserialize(mvd)?))
+        }
+    }
+
+    deserializer.deserialize_any(GitFeaturesVisitor)
 }
 
 fn parse_git(it: impl Iterator<Item = impl AsRef<str>>) -> CargoResult<Option<GitFeatures>> {
@@ -905,7 +957,7 @@ fn parse_git(it: impl Iterator<Item = impl AsRef<str>>) -> CargoResult<Option<Gi
     Ok(Some(out))
 }
 
-#[derive(Debug, Copy, Clone, Default, Deserialize)]
+#[derive(Debug, Copy, Clone, Default, Deserialize, Ord, PartialOrd, Eq, PartialEq)]
 pub struct GitoxideFeatures {
     /// All fetches are done with `gitoxide`, which includes git dependencies as well as the crates index.
     pub fetch: bool,
@@ -921,7 +973,7 @@ pub struct GitoxideFeatures {
 }
 
 impl GitoxideFeatures {
-    fn all() -> Self {
+    pub fn all() -> Self {
         GitoxideFeatures {
             fetch: true,
             list_files: true,
@@ -942,6 +994,65 @@ impl GitoxideFeatures {
     }
 }
 
+fn deserialize_gitoxide_features<'de, D>(
+    deserializer: D,
+) -> Result<Option<GitoxideFeatures>, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    struct GitoxideFeaturesVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for GitoxideFeaturesVisitor {
+        type Value = Option<GitoxideFeatures>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("a comma-separated list of gitoxide features")
+        }
+
+        fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(parse_gitoxide(s.split(",")).map_err(serde::de::Error::custom)?)
+        }
+
+        fn visit_bool<E>(self, s: bool) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            if s {
+                Ok(Some(GitoxideFeatures::all()))
+            } else {
+                Ok(None)
+            }
+        }
+
+        fn visit_none<E>(self) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(None)
+        }
+
+        fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+        where
+            D: serde::de::Deserializer<'de>,
+        {
+            deserializer.deserialize_any(self)
+        }
+
+        fn visit_map<V>(self, map: V) -> Result<Self::Value, V::Error>
+        where
+            V: serde::de::MapAccess<'de>,
+        {
+            let mvd = serde::de::value::MapAccessDeserializer::new(map);
+            Ok(Some(GitoxideFeatures::deserialize(mvd)?))
+        }
+    }
+
+    deserializer.deserialize_any(GitoxideFeaturesVisitor)
+}
+
 fn parse_gitoxide(
     it: impl Iterator<Item = impl AsRef<str>>,
 ) -> CargoResult<Option<GitoxideFeatures>> {
@@ -960,7 +1071,7 @@ fn parse_gitoxide(
             "list-files" => *list_files = true,
             "internal-use-git2" => *internal_use_git2 = true,
             _ => {
-                bail!("unstable 'gitoxide' only takes `fetch`, `list-files` and 'checkout' as valid input, for shallow fetches see `-Zgit=shallow-index,shallow-deps`")
+                bail!("unstable 'gitoxide' only takes `fetch`, `list-files` and 'checkout' as valid input, for shallow fetches see `shallow-index,shallow-deps`")
             }
         }
     }
