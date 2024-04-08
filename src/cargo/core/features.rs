@@ -884,6 +884,14 @@ impl GitFeatures {
             shallow_deps: true,
         }
     }
+
+    fn expecting() -> String {
+        let fields = vec!["'all'", "'shallow-index'", "'shallow-deps'"];
+        format!(
+            "unstable 'git' only takes {} as valid inputs, your can use 'all' to turn out all git features",
+            fields.join(" and ")
+        )
+    }
 }
 
 fn deserialize_git_features<'de, D>(deserializer: D) -> Result<Option<GitFeatures>, D::Error>
@@ -896,7 +904,7 @@ where
         type Value = Option<GitFeatures>;
 
         fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-            formatter.write_str("a comma-separated list of git features")
+            formatter.write_str(&GitFeatures::expecting())
         }
 
         fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
@@ -906,22 +914,11 @@ where
             Ok(parse_git(s.split(",")).map_err(serde::de::Error::custom)?)
         }
 
-        fn visit_bool<E>(self, s: bool) -> Result<Self::Value, E>
+        fn visit_none<E>(self) -> Result<Self::Value, E>
         where
             E: serde::de::Error,
         {
-            if s {
-                Ok(Some(GitFeatures::all()))
-            } else {
-                Ok(None)
-            }
-        }
-
-        fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-        where
-            D: serde::de::Deserializer<'de>,
-        {
-            deserializer.deserialize_any(self)
+            Ok(None)
         }
 
         fn visit_map<V>(self, map: V) -> Result<Self::Value, V::Error>
@@ -945,12 +942,11 @@ fn parse_git(it: impl Iterator<Item = impl AsRef<str>>) -> CargoResult<Option<Gi
 
     for e in it {
         match e.as_ref() {
+            "all" => return Ok(Some(GitFeatures::all())),
             "shallow-index" => *shallow_index = true,
             "shallow-deps" => *shallow_deps = true,
             _ => {
-                bail!(
-                    "unstable 'git' only takes 'shallow-index' and 'shallow-deps' as valid inputs"
-                )
+                bail!(GitFeatures::expecting())
             }
         }
     }
@@ -992,6 +988,20 @@ impl GitoxideFeatures {
             internal_use_git2: false,
         }
     }
+
+    fn expecting() -> String {
+        let fields = vec![
+            "'all'",
+            "'fetch'",
+            "'list-files'",
+            "'checkout'",
+            "'internal-use-git2'",
+        ];
+        format!(
+            "unstable 'gitoxide' only takes {} as valid inputs, your can use 'all' to turn out all gitoxide features, for shallow fetches see `shallow-index,shallow-deps`",
+            fields.join(" and ")
+        )
+    }
 }
 
 fn deserialize_gitoxide_features<'de, D>(
@@ -1006,7 +1016,7 @@ where
         type Value = Option<GitoxideFeatures>;
 
         fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-            formatter.write_str("a comma-separated list of gitoxide features")
+            formatter.write_str(&GitoxideFeatures::expecting())
         }
 
         fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
@@ -1016,29 +1026,11 @@ where
             Ok(parse_gitoxide(s.split(",")).map_err(serde::de::Error::custom)?)
         }
 
-        fn visit_bool<E>(self, s: bool) -> Result<Self::Value, E>
-        where
-            E: serde::de::Error,
-        {
-            if s {
-                Ok(Some(GitoxideFeatures::all()))
-            } else {
-                Ok(None)
-            }
-        }
-
         fn visit_none<E>(self) -> Result<Self::Value, E>
         where
             E: serde::de::Error,
         {
             Ok(None)
-        }
-
-        fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-        where
-            D: serde::de::Deserializer<'de>,
-        {
-            deserializer.deserialize_any(self)
         }
 
         fn visit_map<V>(self, map: V) -> Result<Self::Value, V::Error>
@@ -1066,12 +1058,13 @@ fn parse_gitoxide(
 
     for e in it {
         match e.as_ref() {
+            "all" => return Ok(Some(GitoxideFeatures::all())),
             "fetch" => *fetch = true,
             "checkout" => *checkout = true,
             "list-files" => *list_files = true,
             "internal-use-git2" => *internal_use_git2 = true,
             _ => {
-                bail!("unstable 'gitoxide' only takes `fetch`, `list-files` and 'checkout' as valid input, for shallow fetches see `shallow-index,shallow-deps`")
+                bail!(GitoxideFeatures::expecting())
             }
         }
     }

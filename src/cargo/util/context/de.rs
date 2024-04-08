@@ -62,7 +62,12 @@ impl<'de, 'gctx> de::Deserializer<'de> for Deserializer<'gctx> {
             let (res, def) = res;
             return res.map_err(|e| e.with_key_context(&self.key, def));
         }
-        Err(ConfigError::missing(&self.key))
+
+        // Let's assume that `unstable.git` had defined its `deserialize_any`` method,
+        // then run `CARGO_UNSTABLE_GIT_SHALLOW_INDEX cargo fetch`, here will return `missing config key unstable.git`.
+        // It seems that anything that starts with CARGO_UNSTABLE_GIT, even like CARGO_UNSTABLE_GITOXIDE can trigger this.
+        // This is a workaround for now, but should be fixed in the future.
+        visitor.visit_none()
     }
 
     deserialize_method!(deserialize_bool, visit_bool, get_bool);

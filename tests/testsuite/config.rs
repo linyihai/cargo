@@ -1804,21 +1804,31 @@ fn trim_paths_parsing() {
 }
 
 #[cargo_test]
-fn git_features_env() {
+fn git_features_as_str() {
     let gctx = GlobalContextBuilder::new()
-        .env("CARGO_UNSTABLE_GIT", "true")
+        .env("CARGO_UNSTABLE_GIT", "shallow-index")
         .build();
-    verify(gctx, GitFeatures::all());
+    verify(
+        gctx,
+        Some(GitFeatures {
+            shallow_index: true,
+            ..GitFeatures::default()
+        }),
+    );
+
+    let gctx = GlobalContextBuilder::new()
+        .env("CARGO_UNSTABLE_GIT", "all,shallow-index")
+        .build();
+    verify(gctx, Some(GitFeatures::all()));
 
     let gctx = GlobalContextBuilder::new()
         .env("CARGO_UNSTABLE_GIT", "shallow-index,shallow-deps")
         .build();
-    verify(gctx, GitFeatures::all());
+    verify(gctx, Some(GitFeatures::all()));
 
     let gctx = GlobalContextBuilder::new()
         .env("CARGO_UNSTABLE_GIT", "shallow-index,abc")
         .build();
-
     assert_error(
         gctx.get::<Option<cargo::core::CliUnstable>>("unstable")
             .unwrap_err(),
@@ -1826,7 +1836,7 @@ fn git_features_env() {
 error in environment variable `CARGO_UNSTABLE_GIT`: could not load config key `unstable.git`
 
 Caused by:
-  unstable 'git' only takes 'shallow-index' and 'shallow-deps' as valid inputs",
+  unstable 'git' only takes 'all' and 'shallow-index' and 'shallow-deps' as valid inputs, your can use 'all' to turn out all git features",
     );
 
     let gctx = GlobalContextBuilder::new()
@@ -1834,26 +1844,20 @@ Caused by:
         .build();
     verify(
         gctx,
-        GitFeatures {
+        Some(GitFeatures {
             shallow_index: false,
             shallow_deps: true,
-        },
+        }),
     );
 
     write_config_toml(
         "\
     [unstable]
-    git = true
+    git = 'all'
     ",
     );
     let gctx = GlobalContextBuilder::new().build();
-    verify(
-        gctx,
-        GitFeatures {
-            shallow_index: true,
-            shallow_deps: true,
-        },
-    );
+    verify(gctx, Some(GitFeatures::all()));
 
     write_config_toml(
         "\
@@ -1864,12 +1868,48 @@ Caused by:
     let gctx = GlobalContextBuilder::new().build();
     verify(
         gctx,
-        GitFeatures {
+        Some(GitFeatures {
             shallow_index: true,
             shallow_deps: false,
-        },
+        }),
     );
 
+    fn verify(gctx: GlobalContext, expect: Option<GitFeatures>) {
+        let unstable_flags = gctx
+            .get::<Option<cargo::core::CliUnstable>>("unstable")
+            .unwrap()
+            .unwrap();
+        assert_eq!(unstable_flags.git, expect);
+    }
+}
+
+#[cargo_test]
+fn git_features_as_table() {
+    // A single feature in ENV can't be specified
+    let gctx = GlobalContextBuilder::new()
+        .env("CARGO_UNSTABLE_GIT_SHALLOW_INDEX", "true")
+        .build();
+    let unstable_flags = gctx
+        .get::<Option<cargo::core::CliUnstable>>("unstable")
+        .unwrap();
+    assert!(unstable_flags.unwrap().git.is_none());
+
+    write_config_toml(
+        "\
+    [unstable.git]
+    shallow_deps = false
+    shallow_index = true
+    ",
+    );
+    let gctx = GlobalContextBuilder::new().build();
+    verify(
+        gctx,
+        Some(GitFeatures {
+            shallow_index: true,
+            shallow_deps: false,
+        }),
+    );
+    // Still warning missing a field.
     write_config_toml(
         "\
     [unstable.git]
@@ -1886,23 +1926,116 @@ Caused by:
   missing field `shallow_index`",
     );
 
-    fn verify(gctx: GlobalContext, expect: GitFeatures) {
+    fn verify(gctx: GlobalContext, expect: Option<GitFeatures>) {
         let unstable_flags = gctx
             .get::<Option<cargo::core::CliUnstable>>("unstable")
             .unwrap()
             .unwrap();
-        let git = unstable_flags.git.unwrap();
-        assert_eq!(git, expect);
+        assert_eq!(unstable_flags.git, expect);
     }
 }
 
 #[cargo_test]
-fn gitoxide_features_env() {
+fn gitoxide_features_as_str() {
     let gctx = GlobalContextBuilder::new()
-        .env("CARGO_UNSTABLE_GITOXIDE", "true")
+        .env("CARGO_UNSTABLE_GITOXIDE", "fetch")
         .build();
-    verify(gctx, GitoxideFeatures::all());
+    verify(
+        gctx,
+        Some(GitoxideFeatures {
+            fetch: true,
+            ..GitoxideFeatures::default()
+        }),
+    );
 
+    let gctx = GlobalContextBuilder::new()
+        .env("CARGO_UNSTABLE_GITOXIDE", "all,fetch")
+        .build();
+    verify(gctx, Some(GitoxideFeatures::all()));
+
+    let gctx = GlobalContextBuilder::new()
+        .env("CARGO_UNSTABLE_GITOXIDE", "fetch,list-files,checkout")
+        .build();
+    verify(gctx, Some(GitoxideFeatures::all()));
+
+    let gctx = GlobalContextBuilder::new()
+        .env("CARGO_UNSTABLE_GITOXIDE", "fetch,abc")
+        .build();
+
+    assert_error(
+        gctx.get::<Option<cargo::core::CliUnstable>>("unstable")
+            .unwrap_err(),
+        "\
+error in environment variable `CARGO_UNSTABLE_GITOXIDE`: could not load config key `unstable.gitoxide`
+
+Caused by:
+  unstable 'gitoxide' only takes 'all' and 'fetch' and 'list-files' and 'checkout' and 'internal-use-git2' as valid inputs, your can use 'all' to turn out all gitoxide features, for shallow fetches see `shallow-index,shallow-deps`",
+    );
+
+    write_config_toml(
+        "\
+    [unstable]
+    gitoxide = 'all'
+    ",
+    );
+    let gctx = GlobalContextBuilder::new().build();
+    verify(gctx, Some(GitoxideFeatures::all()));
+
+    write_config_toml(
+        "\
+    [unstable]
+    gitoxide = \"fetch\"
+    ",
+    );
+    let gctx = GlobalContextBuilder::new().build();
+    verify(
+        gctx,
+        Some(GitoxideFeatures {
+            fetch: true,
+            ..GitoxideFeatures::default()
+        }),
+    );
+
+    fn verify(gctx: GlobalContext, expect: Option<GitoxideFeatures>) {
+        let unstable_flags = gctx
+            .get::<Option<cargo::core::CliUnstable>>("unstable")
+            .unwrap()
+            .unwrap();
+        assert_eq!(unstable_flags.gitoxide, expect);
+    }
+}
+
+#[cargo_test]
+fn gitoxide_features_as_table() {
+    // A single feature in ENV can't be specified
+    let gctx = GlobalContextBuilder::new()
+        .env("CARGO_UNSTABLE_GITOXIDE_SHALLOW_INDEX", "true")
+        .build();
+    let unstable_flags = gctx
+        .get::<Option<cargo::core::CliUnstable>>("unstable")
+        .unwrap();
+    assert!(unstable_flags.unwrap().gitoxide.is_none());
+
+    write_config_toml(
+        "\
+    [unstable.gitoxide]
+    fetch = true
+    list_files = false
+    checkout = false
+    internal_use_git2 = false
+    ",
+    );
+    let gctx = GlobalContextBuilder::new().build();
+    verify(
+        gctx,
+        Some(GitoxideFeatures {
+            fetch: true,
+            list_files: false,
+            checkout: false,
+            internal_use_git2: false,
+        }),
+    );
+    // Still warning missing a field.
     write_config_toml(
         "\
     [unstable.gitoxide]
@@ -1919,12 +2052,11 @@ Caused by:
   missing field `fetch`",
     );
 
-    fn verify(gctx: GlobalContext, expect: GitoxideFeatures) {
+    fn verify(gctx: GlobalContext, expect: Option<GitoxideFeatures>) {
         let unstable_flags = gctx
             .get::<Option<cargo::core::CliUnstable>>("unstable")
             .unwrap()
             .unwrap();
-        let gitoxide = unstable_flags.gitoxide.unwrap();
-        assert_eq!(gitoxide, expect);
+        assert_eq!(unstable_flags.gitoxide, expect);
     }
 }
