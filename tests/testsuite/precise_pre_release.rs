@@ -78,7 +78,7 @@ fn update_pre_release() {
 fn update_pre_release_differ() {
     cargo_test_support::registry::init();
 
-    for version in ["0.1.2", "0.1.2-pre.0", "0.1.2-pre.1"] {
+    for version in ["0.1.2-pre.0", "0.1.2", "0.1.3-pre.1", "0.1.3", "0.2.0-0"] {
         cargo_test_support::registry::Package::new("my-dependency", version).publish();
     }
 
@@ -97,22 +97,53 @@ fn update_pre_release_differ() {
 
     p.cargo("update -p my-dependency --precise 0.1.2-pre.0 -Zunstable-options")
         .masquerade_as_nightly_cargo(&["precise-pre-release"])
+        .with_status(101)
         .with_stderr_data(str![[r#"
 [UPDATING] `dummy-registry` index
-[DOWNGRADING] my-dependency v0.1.2 -> v0.1.2-pre.0
+[ERROR] failed to select a version for the requirement `my-dependency = "^0.1.2"`
+candidate versions found which didn't match: 0.1.2-pre.0
+location searched: `dummy-registry` index (which is replacing registry `crates-io`)
+required by package `package v0.0.0 ([ROOT]/foo)`
+if you are looking for the prerelease package it needs to be specified explicitly
+    my-dependency = { version = "0.1.2-pre.0" }
+perhaps a crate was updated and forgotten to be re-vendored?
 
 "#]])
         .run();
 
-    p.cargo("update -p my-dependency --precise 0.1.2-pre.1 -Zunstable-options")
+    p.cargo("update -p my-dependency --precise 0.2.0-0 -Zunstable-options")
+        .masquerade_as_nightly_cargo(&["precise-pre-release"])
+        .with_status(101)
+        .with_stderr_data(str![[r#"
+[UPDATING] `dummy-registry` index
+[ERROR] failed to select a version for the requirement `my-dependency = "^0.1.2"`
+candidate versions found which didn't match: 0.2.0-0
+location searched: `dummy-registry` index (which is replacing registry `crates-io`)
+required by package `package v0.0.0 ([ROOT]/foo)`
+if you are looking for the prerelease package it needs to be specified explicitly
+    my-dependency = { version = "0.2.0-0" }
+perhaps a crate was updated and forgotten to be re-vendored?
+
+"#]])
+        .run();
+
+    p.cargo("update -p my-dependency --precise 0.1.3 -Zunstable-options")
         .masquerade_as_nightly_cargo(&["precise-pre-release"])
         .with_stderr_data(str![[r#"
 [UPDATING] `dummy-registry` index
-[UPDATING] my-dependency v0.1.2-pre.0 -> v0.1.2-pre.1
+
+"#]])
+        .run();
+
+    p.cargo("update -p my-dependency --precise 0.1.3-pre.1 -Zunstable-options")
+        .masquerade_as_nightly_cargo(&["precise-pre-release"])
+        .with_stderr_data(str![[r#"
+[UPDATING] `dummy-registry` index
+[DOWNGRADING] my-dependency v0.1.3 -> v0.1.3-pre.1
 
 "#]])
         .run();
 
     let lockfile = p.read_lockfile();
-    assert!(lockfile.contains("\nname = \"my-dependency\"\nversion = \"0.1.2-pre.1\""));
+    assert!(lockfile.contains("\nname = \"my-dependency\"\nversion = \"0.1.3-pre.1\""));
 }

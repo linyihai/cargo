@@ -318,7 +318,7 @@ dependencies = [
  "rusqlite",
  "rustfix",
  "same-file",
- "semver",
+ "semver 1.0.23 (git+https://github.com/linyihai/semver.git?branch=prerelease-match)",
  "serde",
  "serde-untagged",
  "serde_ignored",
@@ -464,7 +464,7 @@ dependencies = [
 name = "cargo-util-schemas"
 version = "0.5.0"
 dependencies = [
- "semver",
+ "semver 1.0.23 (git+https://github.com/linyihai/semver.git?branch=prerelease-match)",
  "serde",
  "serde-untagged",
  "serde-value",
@@ -483,7 +483,7 @@ checksum = "2d886547e41f740c616ae73108f6eb70afe6d940c7bc697cb30f13daec073037"
 dependencies = [
  "camino",
  "cargo-platform 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "semver",
+ "semver 1.0.23 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "serde_json",
  "thiserror",
@@ -3058,6 +3058,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "semver"
+version = "1.0.23"
+source = "git+https://github.com/linyihai/semver.git?branch=prerelease-match#cdd2f9c0fdc57e79a362cb76e625e3731abfef08"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "semver-check"
 version = "0.0.0"
 dependencies = [
@@ -4031,7 +4039,7 @@ dependencies = [
  "cargo-util",
  "clap",
  "git2",
- "semver",
+ "semver 1.0.23 (git+https://github.com/linyihai/semver.git?branch=prerelease-match)",
  "tracing",
  "tracing-subscriber",
 ]
