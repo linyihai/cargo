@@ -2,11 +2,42 @@
 //!
 //! See <https://rust-lang.github.io/cargo/contrib/> for a guide on writing tests.
 //!
-//! WARNING: You might not want to use this outside of Cargo.
+//! There are two places you can find API documentation
 //!
-//! * This is designed for testing Cargo itself. Use at your own risk.
-//! * No guarantee on any stability across versions.
-//! * No feature request would be accepted unless proved useful for testing Cargo.
+//! - <https://docs.rs/cargo-test-support>:
+//!   targeted at external tool developers testing cargo-related code
+//!   - Released with every rustc release
+//! - <https://doc.rust-lang.org/nightly/nightly-rustc/cargo_test_support>:
+//!   targeted at cargo contributors
+//!   - Updated on each update of the `cargo` submodule in `rust-lang/rust`
+//!
+//! > This crate is maintained by the Cargo team, primarily for use by Cargo
+//! > and not intended for external use. This
+//! > crate may make major changes to its APIs or be deprecated without warning.
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! use cargo_test_support::prelude::*;
+//! use cargo_test_support::str;
+//! use cargo_test_support::project;
+//!
+//! #[cargo_test]
+//! fn some_test() {
+//!     let p = project()
+//!         .file("src/main.rs", r#"fn main() { println!("hi!"); }"#)
+//!         .build();
+//!
+//!     p.cargo("run --bin foo")
+//!         .with_stderr_data(str![[r#"
+//! [COMPILING] foo [..]
+//! [FINISHED] [..]
+//! [RUNNING] `target/debug/foo`
+//! "#]])
+//!         .with_stdout_data(str![["hi!"]])
+//!         .run();
+//! }
+//! ```
 
 #![allow(clippy::disallowed_methods)]
 #![allow(clippy::print_stderr)]
@@ -24,12 +55,20 @@ use std::thread::JoinHandle;
 use std::time::{self, Duration};
 
 use anyhow::{bail, Result};
-use cargo_util::{is_ci, ProcessBuilder, ProcessError};
+use cargo_util::{is_ci, ProcessError};
 use snapbox::IntoData as _;
 use url::Url;
 
 use self::paths::CargoPathExt;
 
+/// Unwrap a `Result` with a useful panic message
+///
+/// # Example
+///
+/// ```rust
+/// use cargo_test_support::t;
+/// t!(std::fs::read_to_string("Cargo.toml"));
+/// ```
 #[macro_export]
 macro_rules! t {
     ($e:expr) => {
@@ -40,10 +79,12 @@ macro_rules! t {
     };
 }
 
+pub use cargo_util::ProcessBuilder;
 pub use snapbox::file;
 pub use snapbox::str;
 pub use snapbox::utils::current_dir;
 
+/// `panic!`, reporting the specified error , see also [`t!`]
 #[track_caller]
 pub fn panic_error(what: &str, err: impl Into<anyhow::Error>) -> ! {
     let err = err.into();
@@ -74,10 +115,11 @@ pub mod tools;
 
 pub mod prelude {
     pub use crate::cargo_test;
-    pub use crate::ArgLine;
-    pub use crate::CargoCommand;
-    pub use crate::ChannelChanger;
-    pub use crate::TestEnv;
+    pub use crate::paths::CargoPathExt;
+    pub use crate::ArgLineCommandExt;
+    pub use crate::CargoCommandExt;
+    pub use crate::ChannelChangerCommandExt;
+    pub use crate::TestEnvCommandExt;
     pub use snapbox::IntoData;
 }
 
@@ -189,7 +231,13 @@ pub struct Project {
 
 /// Create a project to run tests against
 ///
-/// The project can be constructed programmatically or from the filesystem with [`Project::from_template`]
+/// - Creates a [`basic_manifest`] if one isn't supplied
+///
+/// To get started, see:
+/// - [`project`]
+/// - [`project_in`]
+/// - [`project_in_home`]
+/// - [`Project::from_template`]
 #[must_use]
 pub struct ProjectBuilder {
     root: Project,
@@ -199,16 +247,21 @@ pub struct ProjectBuilder {
 }
 
 impl ProjectBuilder {
-    /// Root of the project, ex: `/path/to/cargo/target/cit/t0/foo`
+    /// Root of the project
+    ///
+    /// ex: `$CARGO_TARGET_TMPDIR/cit/t0/foo`
     pub fn root(&self) -> PathBuf {
         self.root.root()
     }
 
-    /// Project's debug dir, ex: `/path/to/cargo/target/cit/t0/foo/target/debug`
+    /// Project's debug dir
+    ///
+    /// ex: `$CARGO_TARGET_TMPDIR/cit/t0/foo/target/debug`
     pub fn target_debug_dir(&self) -> PathBuf {
         self.root.target_debug_dir()
     }
 
+    /// Create project in `root`
     pub fn new(root: PathBuf) -> ProjectBuilder {
         ProjectBuilder {
             root: Project { root },
@@ -218,6 +271,7 @@ impl ProjectBuilder {
         }
     }
 
+    /// Create project, relative to [`paths::root`]
     pub fn at<P: AsRef<Path>>(mut self, path: P) -> Self {
         self.root = Project {
             root: paths::root().join(path),
@@ -322,29 +376,40 @@ impl Project {
         Self { root: project_root }
     }
 
-    /// Root of the project, ex: `/path/to/cargo/target/cit/t0/foo`
+    /// Root of the project
+    ///
+    /// ex: `$CARGO_TARGET_TMPDIR/cit/t0/foo`
     pub fn root(&self) -> PathBuf {
         self.root.clone()
     }
 
-    /// Project's target dir, ex: `/path/to/cargo/target/cit/t0/foo/target`
+    /// Project's target dir
+    ///
+    /// ex: `$CARGO_TARGET_TMPDIR/cit/t0/foo/target`
     pub fn build_dir(&self) -> PathBuf {
         self.root().join("target")
     }
 
-    /// Project's debug dir, ex: `/path/to/cargo/target/cit/t0/foo/target/debug`
+    /// Project's debug dir
+    ///
+    /// ex: `$CARGO_TARGET_TMPDIR/cit/t0/foo/target/debug`
     pub fn target_debug_dir(&self) -> PathBuf {
         self.build_dir().join("debug")
     }
 
-    /// File url for root, ex: `file:///path/to/cargo/target/cit/t0/foo`
+    /// File url for root
+    ///
+    /// ex: `file://$CARGO_TARGET_TMPDIR/cit/t0/foo`
     pub fn url(&self) -> Url {
-        path2url(self.root())
+        use paths::CargoPathExt;
+        self.root().to_url()
     }
 
     /// Path to an example built as a library.
+    ///
     /// `kind` should be one of: "lib", "rlib", "staticlib", "dylib", "proc-macro"
-    /// ex: `/path/to/cargo/target/cit/t0/foo/target/debug/examples/libex.rlib`
+    ///
+    /// ex: `$CARGO_TARGET_TMPDIR/cit/t0/foo/target/debug/examples/libex.rlib`
     pub fn example_lib(&self, name: &str, kind: &str) -> PathBuf {
         self.target_debug_dir()
             .join("examples")
@@ -352,7 +417,8 @@ impl Project {
     }
 
     /// Path to a debug binary.
-    /// ex: `/path/to/cargo/target/cit/t0/foo/target/debug/foo`
+    ///
+    /// ex: `$CARGO_TARGET_TMPDIR/cit/t0/foo/target/debug/foo`
     pub fn bin(&self, b: &str) -> PathBuf {
         self.build_dir()
             .join("debug")
@@ -360,7 +426,8 @@ impl Project {
     }
 
     /// Path to a release binary.
-    /// ex: `/path/to/cargo/target/cit/t0/foo/target/release/foo`
+    ///
+    /// ex: `$CARGO_TARGET_TMPDIR/cit/t0/foo/target/release/foo`
     pub fn release_bin(&self, b: &str) -> PathBuf {
         self.build_dir()
             .join("release")
@@ -368,7 +435,8 @@ impl Project {
     }
 
     /// Path to a debug binary for a specific target triple.
-    /// ex: `/path/to/cargo/target/cit/t0/foo/target/i686-apple-darwin/debug/foo`
+    ///
+    /// ex: `$CARGO_TARGET_TMPDIR/cit/t0/foo/target/i686-apple-darwin/debug/foo`
     pub fn target_bin(&self, target: &str, b: &str) -> PathBuf {
         self.build_dir().join(target).join("debug").join(&format!(
             "{}{}",
@@ -377,25 +445,37 @@ impl Project {
         ))
     }
 
-    /// Returns an iterator of paths matching the glob pattern, which is
-    /// relative to the project root.
+    /// Returns an iterator of paths within [`Project::root`] matching the glob pattern
     pub fn glob<P: AsRef<Path>>(&self, pattern: P) -> glob::Paths {
         let pattern = self.root().join(pattern);
         glob::glob(pattern.to_str().expect("failed to convert pattern to str"))
             .expect("failed to glob")
     }
 
-    /// Changes the contents of an existing file.
+    /// Overwrite a file with new content
+    ///
+    // # Example:
+    ///
+    /// ```no_run
+    /// # let p = cargo_test_support::project().build();
+    /// p.change_file("src/lib.rs", "fn new_fn() {}");
+    /// ```
     pub fn change_file(&self, path: &str, body: &str) {
         FileBuilder::new(self.root().join(path), body, false).mk()
     }
 
     /// Creates a `ProcessBuilder` to run a program in the project
     /// and wrap it in an Execs to assert on the execution.
-    /// Example:
-    ///         p.process(&p.bin("foo"))
-    ///             .with_stdout("bar\n")
-    ///             .run();
+    ///
+    /// # Example:
+    ///
+    /// ```no_run
+    /// # use cargo_test_support::str;
+    /// # let p = cargo_test_support::project().build();
+    /// p.process(&p.bin("foo"))
+    ///     .with_stdout_data(str!["bar\n"])
+    ///     .run();
+    /// ```
     pub fn process<T: AsRef<OsStr>>(&self, program: T) -> Execs {
         let mut p = process(program);
         p.cwd(self.root());
@@ -403,9 +483,17 @@ impl Project {
     }
 
     /// Creates a `ProcessBuilder` to run cargo.
+    ///
     /// Arguments can be separated by spaces.
-    /// Example:
-    ///     p.cargo("build --bin foo").run();
+    ///
+    /// For `cargo run`, see [`Project::rename_run`].
+    ///
+    /// # Example:
+    ///
+    /// ```no_run
+    /// # let p = cargo_test_support::project().build();
+    /// p.cargo("build --bin foo").run();
+    /// ```
     pub fn cargo(&self, cmd: &str) -> Execs {
         let cargo = cargo_exe();
         let mut execs = self.process(&cargo);
@@ -479,27 +567,41 @@ impl Project {
     }
 }
 
-// Generates a project layout
+/// Generates a project layout, see [`ProjectBuilder`]
 pub fn project() -> ProjectBuilder {
     ProjectBuilder::new(paths::root().join("foo"))
 }
 
-// Generates a project layout in given directory
+/// Generates a project layout in given directory, see [`ProjectBuilder`]
 pub fn project_in(dir: &str) -> ProjectBuilder {
     ProjectBuilder::new(paths::root().join(dir).join("foo"))
 }
 
-// Generates a project layout inside our fake home dir
+/// Generates a project layout inside our fake home dir, see [`ProjectBuilder`]
 pub fn project_in_home(name: &str) -> ProjectBuilder {
     ProjectBuilder::new(paths::home().join(name))
 }
 
 // === Helpers ===
 
-pub fn main_file(println: &str, deps: &[&str]) -> String {
+/// Generate a `main.rs` printing the specified text
+///
+/// ```rust
+/// # use cargo_test_support::main_file;
+/// # mod dep {
+/// #     fn bar() -> &'static str {
+/// #         "world"
+/// #     }
+/// # }
+/// main_file(
+///     r#""hello {}", dep::bar()"#,
+///     &[]
+/// );
+/// ```
+pub fn main_file(println: &str, externed_deps: &[&str]) -> String {
     let mut buf = String::new();
 
-    for dep in deps.iter() {
+    for dep in externed_deps.iter() {
         buf.push_str(&format!("extern crate {};\n", dep));
     }
 
@@ -510,6 +612,7 @@ pub fn main_file(println: &str, deps: &[&str]) -> String {
     buf
 }
 
+/// Path to the cargo binary
 pub fn cargo_exe() -> PathBuf {
     snapbox::cmd::cargo_bin("cargo")
 }
@@ -521,20 +624,26 @@ pub fn cargo_exe() -> PathBuf {
 /// does not have access to the raw `ExitStatus` because `ProcessError` needs
 /// to be serializable (for the Rustc cache), and `ExitStatus` does not
 /// provide a constructor.
-pub struct RawOutput {
-    pub code: Option<i32>,
-    pub stdout: Vec<u8>,
-    pub stderr: Vec<u8>,
+struct RawOutput {
+    #[allow(dead_code)]
+    code: Option<i32>,
+    stdout: Vec<u8>,
+    #[allow(dead_code)]
+    stderr: Vec<u8>,
 }
 
+/// Run and verify a [`ProcessBuilder`]
+///
+/// Construct with
+/// - [`execs`]
+/// - [`cargo_process`]
+/// - [`Project`] methods
 #[must_use]
 #[derive(Clone)]
 pub struct Execs {
     ran: bool,
     process_builder: Option<ProcessBuilder>,
-    expect_stdout: Option<String>,
     expect_stdin: Option<String>,
-    expect_stderr: Option<String>,
     expect_exit_code: Option<i32>,
     expect_stdout_data: Option<snapbox::Data>,
     expect_stderr_data: Option<snapbox::Data>,
@@ -546,8 +655,6 @@ pub struct Execs {
     expect_stdout_unordered: Vec<String>,
     expect_stderr_unordered: Vec<String>,
     expect_stderr_with_without: Vec<(Vec<String>, Vec<String>)>,
-    expect_json: Option<String>,
-    expect_json_contains_unordered: Option<String>,
     stream_output: bool,
     assert: snapbox::Assert,
 }
@@ -557,23 +664,10 @@ impl Execs {
         self.process_builder = Some(p);
         self
     }
+}
 
-    /// Verifies that stdout is equal to the given lines.
-    /// See [`compare`] for supported patterns.
-    #[deprecated(note = "replaced with `Execs::with_stdout_data(expected)`")]
-    pub fn with_stdout<S: ToString>(&mut self, expected: S) -> &mut Self {
-        self.expect_stdout = Some(expected.to_string());
-        self
-    }
-
-    /// Verifies that stderr is equal to the given lines.
-    /// See [`compare`] for supported patterns.
-    #[deprecated(note = "replaced with `Execs::with_stderr_data(expected)`")]
-    pub fn with_stderr<S: ToString>(&mut self, expected: S) -> &mut Self {
-        self.expect_stderr = Some(expected.to_string());
-        self
-    }
-
+/// # Configure assertions
+impl Execs {
     /// Verifies that stdout is equal to the given lines.
     ///
     /// See [`compare::assert_e2e`] for assertion details.
@@ -629,17 +723,6 @@ impl Execs {
     #[deprecated(note = "replaced with `Execs::with_stderr_data(expected)`")]
     pub fn with_stderr_contains<S: ToString>(&mut self, expected: S) -> &mut Self {
         self.expect_stderr_contains.push(expected.to_string());
-        self
-    }
-
-    /// Verifies that stdout contains the given contiguous lines somewhere in
-    /// its output, and should be repeated `number` times.
-    ///
-    /// See [`compare`] for supported patterns.
-    #[deprecated(note = "replaced with `Execs::with_stdout_data(expected)`")]
-    pub fn with_stdout_contains_n<S: ToString>(&mut self, expected: S, number: usize) -> &mut Self {
-        self.expect_stdout_contains_n
-            .push((expected.to_string(), number));
         self
     }
 
@@ -739,55 +822,10 @@ impl Execs {
         self.expect_stderr_with_without.push((with, without));
         self
     }
+}
 
-    /// Verifies the JSON output matches the given JSON.
-    ///
-    /// This is typically used when testing cargo commands that emit JSON.
-    /// Each separate JSON object should be separated by a blank line.
-    /// Example:
-    ///
-    /// ```rust,ignore
-    /// assert_that(
-    ///     p.cargo("metadata"),
-    ///     execs().with_json(r#"
-    ///         {"example": "abc"}
-    ///
-    ///         {"example": "def"}
-    ///     "#)
-    ///  );
-    /// ```
-    ///
-    /// - Objects should match in the order given.
-    /// - The order of arrays is ignored.
-    /// - Strings support patterns described in [`compare`].
-    /// - Use `"{...}"` to match any object.
-    #[deprecated(note = "replaced with `Execs::with_stdout_data(expected.json_lines())`")]
-    pub fn with_json(&mut self, expected: &str) -> &mut Self {
-        self.expect_json = Some(expected.to_string());
-        self
-    }
-
-    /// Verifies JSON output contains the given objects (in any order) somewhere
-    /// in its output.
-    ///
-    /// CAUTION: Be very careful when using this. Make sure every object is
-    /// unique (not a subset of one another). Also avoid using objects that
-    /// could possibly match multiple output lines unless you're very sure of
-    /// what you are doing.
-    ///
-    /// See `with_json` for more detail.
-    #[deprecated]
-    pub fn with_json_contains_unordered(&mut self, expected: &str) -> &mut Self {
-        match &mut self.expect_json_contains_unordered {
-            None => self.expect_json_contains_unordered = Some(expected.to_string()),
-            Some(e) => {
-                e.push_str("\n\n");
-                e.push_str(expected);
-            }
-        }
-        self
-    }
-
+/// # Configure the process
+impl Execs {
     /// Forward subordinate process stdout/stderr to the terminal.
     /// Useful for printf debugging of the tests.
     /// CAUTION: CI will fail if you leave this in your test!
@@ -841,20 +879,6 @@ impl Execs {
         self
     }
 
-    pub fn exec_with_output(&mut self) -> Result<Output> {
-        self.ran = true;
-        // TODO avoid unwrap
-        let p = (&self.process_builder).clone().unwrap();
-        p.exec_with_output()
-    }
-
-    pub fn build_command(&mut self) -> Command {
-        self.ran = true;
-        // TODO avoid unwrap
-        let p = (&self.process_builder).clone().unwrap();
-        p.build_command()
-    }
-
     /// Enables nightly features for testing
     ///
     /// The list of reasons should be why nightly cargo is needed. If it is
@@ -903,6 +927,23 @@ impl Execs {
         }
         self
     }
+}
+
+/// # Run and verify the process
+impl Execs {
+    pub fn exec_with_output(&mut self) -> Result<Output> {
+        self.ran = true;
+        // TODO avoid unwrap
+        let p = (&self.process_builder).clone().unwrap();
+        p.exec_with_output()
+    }
+
+    pub fn build_command(&mut self) -> Command {
+        self.ran = true;
+        // TODO avoid unwrap
+        let p = (&self.process_builder).clone().unwrap();
+        p.build_command()
+    }
 
     #[track_caller]
     pub fn run(&mut self) {
@@ -946,9 +987,7 @@ impl Execs {
     #[track_caller]
     fn verify_checks_output(&self, stdout: &[u8], stderr: &[u8]) {
         if self.expect_exit_code.unwrap_or(0) != 0
-            && self.expect_stdout.is_none()
             && self.expect_stdin.is_none()
-            && self.expect_stderr.is_none()
             && self.expect_stdout_data.is_none()
             && self.expect_stderr_data.is_none()
             && self.expect_stdout_contains.is_empty()
@@ -959,8 +998,6 @@ impl Execs {
             && self.expect_stdout_unordered.is_empty()
             && self.expect_stderr_unordered.is_empty()
             && self.expect_stderr_with_without.is_empty()
-            && self.expect_json.is_none()
-            && self.expect_json_contains_unordered.is_none()
         {
             panic!(
                 "`with_status()` is used, but no output is checked.\n\
@@ -1042,12 +1079,6 @@ impl Execs {
             ),
         }
 
-        if let Some(expect_stdout) = &self.expect_stdout {
-            compare::match_exact(expect_stdout, stdout, "stdout", stderr, cwd)?;
-        }
-        if let Some(expect_stderr) = &self.expect_stderr {
-            compare::match_exact(expect_stderr, stderr, "stderr", stdout, cwd)?;
-        }
         if let Some(expect_stdout_data) = &self.expect_stdout_data {
             if let Err(err) = self.assert.try_eq(
                 Some(&"stdout"),
@@ -1090,14 +1121,6 @@ impl Execs {
         for (with, without) in self.expect_stderr_with_without.iter() {
             compare::match_with_without(stderr, with, without, cwd)?;
         }
-
-        if let Some(ref expect_json) = self.expect_json {
-            compare::match_json(expect_json, stdout, cwd)?;
-        }
-
-        if let Some(ref expected) = self.expect_json_contains_unordered {
-            compare::match_json_contains_unordered(expected, stdout, cwd)?;
-        }
         Ok(())
     }
 }
@@ -1110,12 +1133,11 @@ impl Drop for Execs {
     }
 }
 
+/// Run and verify a process, see [`Execs`]
 pub fn execs() -> Execs {
     Execs {
         ran: false,
         process_builder: None,
-        expect_stdout: None,
-        expect_stderr: None,
         expect_stdin: None,
         expect_exit_code: Some(0),
         expect_stdout_data: None,
@@ -1128,13 +1150,12 @@ pub fn execs() -> Execs {
         expect_stdout_unordered: Vec::new(),
         expect_stderr_unordered: Vec::new(),
         expect_stderr_with_without: Vec::new(),
-        expect_json: None,
-        expect_json_contains_unordered: None,
         stream_output: false,
         assert: compare::assert_e2e(),
     }
 }
 
+/// Generate a basic `Cargo.toml`
 pub fn basic_manifest(name: &str, version: &str) -> String {
     format!(
         r#"
@@ -1148,6 +1169,7 @@ pub fn basic_manifest(name: &str, version: &str) -> String {
     )
 }
 
+/// Generate a `Cargo.toml` with the specified `bin.name`
 pub fn basic_bin_manifest(name: &str) -> String {
     format!(
         r#"
@@ -1166,6 +1188,7 @@ pub fn basic_bin_manifest(name: &str) -> String {
     )
 }
 
+/// Generate a `Cargo.toml` with the specified `lib.name`
 pub fn basic_lib_manifest(name: &str) -> String {
     format!(
         r#"
@@ -1182,10 +1205,6 @@ pub fn basic_lib_manifest(name: &str) -> String {
     "#,
         name, name
     )
-}
-
-pub fn path2url<P: AsRef<Path>>(p: P) -> Url {
-    Url::from_file_path(p).ok().unwrap()
 }
 
 struct RustcInfo {
@@ -1238,8 +1257,13 @@ pub fn is_nightly() -> bool {
         && (vv.contains("-nightly") || vv.contains("-dev"))
 }
 
-pub fn process<T: AsRef<OsStr>>(t: T) -> ProcessBuilder {
-    _process(t.as_ref())
+/// Run `$bin` in the test's environment, see [`ProcessBuilder`]
+///
+/// For more on the test environment, see
+/// - [`paths::root`]
+/// - [`TestEnvCommandExt`]
+pub fn process<T: AsRef<OsStr>>(bin: T) -> ProcessBuilder {
+    _process(bin.as_ref())
 }
 
 fn _process(t: &OsStr) -> ProcessBuilder {
@@ -1249,27 +1273,27 @@ fn _process(t: &OsStr) -> ProcessBuilder {
 }
 
 /// Enable nightly features for testing
-pub trait ChannelChanger {
+pub trait ChannelChangerCommandExt {
     /// The list of reasons should be why nightly cargo is needed. If it is
     /// because of an unstable feature put the name of the feature as the reason,
     /// e.g. `&["print-im-a-teapot"]`.
     fn masquerade_as_nightly_cargo(self, _reasons: &[&str]) -> Self;
 }
 
-impl ChannelChanger for &mut ProcessBuilder {
+impl ChannelChangerCommandExt for &mut ProcessBuilder {
     fn masquerade_as_nightly_cargo(self, _reasons: &[&str]) -> Self {
         self.env("__CARGO_TEST_CHANNEL_OVERRIDE_DO_NOT_USE_THIS", "nightly")
     }
 }
 
-impl ChannelChanger for snapbox::cmd::Command {
+impl ChannelChangerCommandExt for snapbox::cmd::Command {
     fn masquerade_as_nightly_cargo(self, _reasons: &[&str]) -> Self {
         self.env("__CARGO_TEST_CHANNEL_OVERRIDE_DO_NOT_USE_THIS", "nightly")
     }
 }
 
 /// Establish a process's test environment
-pub trait TestEnv: Sized {
+pub trait TestEnvCommandExt: Sized {
     fn test_env(mut self) -> Self {
         // In general just clear out all cargo-specific configuration already in the
         // environment. Our tests all assume a "default configuration" unless
@@ -1309,7 +1333,7 @@ pub trait TestEnv: Sized {
         self = self
             .current_dir(&paths::root())
             .env("HOME", paths::home())
-            .env("CARGO_HOME", paths::home().join(".cargo"))
+            .env("CARGO_HOME", paths::cargo_home())
             .env("__CARGO_TEST_ROOT", paths::global_root())
             // Force Cargo to think it's on the stable channel for all tests, this
             // should hopefully not surprise us as we add cargo features over time and
@@ -1339,6 +1363,7 @@ pub trait TestEnv: Sized {
             .env_remove("MFLAGS")
             .env_remove("MSYSTEM") // assume cmd.exe everywhere on windows
             .env_remove("RUSTC")
+            .env_remove("RUST_BACKTRACE")
             .env_remove("RUSTC_WORKSPACE_WRAPPER")
             .env_remove("RUSTC_WRAPPER")
             .env_remove("RUSTDOC")
@@ -1359,7 +1384,7 @@ pub trait TestEnv: Sized {
     fn env_remove(self, key: &str) -> Self;
 }
 
-impl TestEnv for &mut ProcessBuilder {
+impl TestEnvCommandExt for &mut ProcessBuilder {
     fn current_dir<S: AsRef<std::path::Path>>(self, path: S) -> Self {
         let path = path.as_ref();
         self.cwd(path)
@@ -1372,7 +1397,7 @@ impl TestEnv for &mut ProcessBuilder {
     }
 }
 
-impl TestEnv for snapbox::cmd::Command {
+impl TestEnvCommandExt for snapbox::cmd::Command {
     fn current_dir<S: AsRef<std::path::Path>>(self, path: S) -> Self {
         self.current_dir(path)
     }
@@ -1385,11 +1410,11 @@ impl TestEnv for snapbox::cmd::Command {
 }
 
 /// Test the cargo command
-pub trait CargoCommand {
+pub trait CargoCommandExt {
     fn cargo_ui() -> Self;
 }
 
-impl CargoCommand for snapbox::cmd::Command {
+impl CargoCommandExt for snapbox::cmd::Command {
     fn cargo_ui() -> Self {
         Self::new(cargo_exe())
             .with_assert(compare::assert_ui())
@@ -1399,7 +1424,7 @@ impl CargoCommand for snapbox::cmd::Command {
 }
 
 /// Add a list of arguments as a line
-pub trait ArgLine: Sized {
+pub trait ArgLineCommandExt: Sized {
     fn arg_line(mut self, s: &str) -> Self {
         for mut arg in s.split_whitespace() {
             if (arg.starts_with('"') && arg.ends_with('"'))
@@ -1417,29 +1442,31 @@ pub trait ArgLine: Sized {
     fn arg<S: AsRef<std::ffi::OsStr>>(self, s: S) -> Self;
 }
 
-impl ArgLine for &mut ProcessBuilder {
+impl ArgLineCommandExt for &mut ProcessBuilder {
     fn arg<S: AsRef<std::ffi::OsStr>>(self, s: S) -> Self {
         self.arg(s)
     }
 }
 
-impl ArgLine for snapbox::cmd::Command {
+impl ArgLineCommandExt for snapbox::cmd::Command {
     fn arg<S: AsRef<std::ffi::OsStr>>(self, s: S) -> Self {
         self.arg(s)
     }
 }
 
-pub fn cargo_process(s: &str) -> Execs {
+/// Run `cargo $arg_line`, see [`Execs`]
+pub fn cargo_process(arg_line: &str) -> Execs {
     let cargo = cargo_exe();
     let mut p = process(&cargo);
     p.env("CARGO", cargo);
-    p.arg_line(s);
+    p.arg_line(arg_line);
     execs().with_process_builder(p)
 }
 
-pub fn git_process(s: &str) -> ProcessBuilder {
+/// Run `git $arg_line`, see [`ProcessBuilder`]
+pub fn git_process(arg_line: &str) -> ProcessBuilder {
     let mut p = process("git");
-    p.arg_line(s);
+    p.arg_line(arg_line);
     p
 }
 
@@ -1554,4 +1581,83 @@ where
 {
     let thread = std::thread::spawn(|| f());
     thread_wait_timeout(n, thread)
+}
+
+// Helper for testing dep-info files in the fingerprint dir.
+#[track_caller]
+pub fn assert_deps(project: &Project, fingerprint: &str, test_cb: impl Fn(&Path, &[(u8, &str)])) {
+    let mut files = project
+        .glob(fingerprint)
+        .map(|f| f.expect("unwrap glob result"))
+        // Filter out `.json` entries.
+        .filter(|f| f.extension().is_none());
+    let info_path = files
+        .next()
+        .unwrap_or_else(|| panic!("expected 1 dep-info file at {}, found 0", fingerprint));
+    assert!(files.next().is_none(), "expected only 1 dep-info file");
+    let dep_info = fs::read(&info_path).unwrap();
+    let dep_info = &mut &dep_info[..];
+    let deps = (0..read_usize(dep_info))
+        .map(|_| {
+            let ty = read_u8(dep_info);
+            let path = std::str::from_utf8(read_bytes(dep_info)).unwrap();
+            let checksum_present = read_bool(dep_info);
+            if checksum_present {
+                // Read out the checksum info without using it
+                let _file_len = read_u64(dep_info);
+                let _checksum = read_bytes(dep_info);
+            }
+            (ty, path)
+        })
+        .collect::<Vec<_>>();
+    test_cb(&info_path, &deps);
+
+    fn read_usize(bytes: &mut &[u8]) -> usize {
+        let ret = &bytes[..4];
+        *bytes = &bytes[4..];
+
+        u32::from_le_bytes(ret.try_into().unwrap()) as usize
+    }
+
+    fn read_u8(bytes: &mut &[u8]) -> u8 {
+        let ret = bytes[0];
+        *bytes = &bytes[1..];
+        ret
+    }
+
+    fn read_bool(bytes: &mut &[u8]) -> bool {
+        read_u8(bytes) != 0
+    }
+
+    fn read_u64(bytes: &mut &[u8]) -> u64 {
+        let ret = &bytes[..8];
+        *bytes = &bytes[8..];
+
+        u64::from_le_bytes(ret.try_into().unwrap())
+    }
+
+    fn read_bytes<'a>(bytes: &mut &'a [u8]) -> &'a [u8] {
+        let n = read_usize(bytes);
+        let ret = &bytes[..n];
+        *bytes = &bytes[n..];
+        ret
+    }
+}
+
+pub fn assert_deps_contains(project: &Project, fingerprint: &str, expected: &[(u8, &str)]) {
+    assert_deps(project, fingerprint, |info_path, entries| {
+        for (e_kind, e_path) in expected {
+            let pattern = glob::Pattern::new(e_path).unwrap();
+            let count = entries
+                .iter()
+                .filter(|(kind, path)| kind == e_kind && pattern.matches(path))
+                .count();
+            if count != 1 {
+                panic!(
+                    "Expected 1 match of {} {} in {:?}, got {}:\n{:#?}",
+                    e_kind, e_path, info_path, count, entries
+                );
+            }
+        }
+    })
 }

@@ -156,7 +156,11 @@ pub fn compile_ws<'a>(
     }
     crate::core::gc::auto_gc(bcx.gctx);
     let build_runner = BuildRunner::new(&bcx)?;
-    build_runner.compile(exec)
+    if options.build_config.dry_run {
+        build_runner.dry_run()
+    } else {
+        build_runner.compile(exec)
+    }
 }
 
 /// Executes `rustc --print <VALUE>`.
@@ -698,6 +702,7 @@ fn traverse_and_share(
             unit.features.clone(),
             unit.rustflags.clone(),
             unit.rustdocflags.clone(),
+            unit.links_overrides.clone(),
             unit.is_std,
             unit.dep_hash,
             unit.artifact,
@@ -725,6 +730,7 @@ fn traverse_and_share(
         unit.features.clone(),
         unit.rustflags.clone(),
         unit.rustdocflags.clone(),
+        unit.links_overrides.clone(),
         unit.is_std,
         new_dep_hash,
         unit.artifact,
@@ -888,6 +894,7 @@ fn override_rustc_crate_types(
             unit.features.clone(),
             unit.rustflags.clone(),
             unit.rustdocflags.clone(),
+            unit.links_overrides.clone(),
             unit.is_std,
             unit.dep_hash,
             unit.artifact,

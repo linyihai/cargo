@@ -406,7 +406,6 @@ fn update_precise() {
         .with_stderr_data(str![[r#"
 [UPDATING] `dummy-registry` index
 [DOWNGRADING] serde v0.2.1 -> v0.2.0
-[NOTE] pass `--verbose` to see 1 unchanged dependencies behind latest
 
 "#]])
         .run();
@@ -838,7 +837,7 @@ fn update_precise_first_run() {
   "workspace_root": "[ROOT]/foo"
 }
 "#]]
-            .json(),
+            .is_json(),
         )
         .run();
 
@@ -1100,7 +1099,7 @@ rustdns.workspace = true
     p.cargo("generate-lockfile")
         .with_stderr_data(str![[r#"
 [UPDATING] git repository `[ROOTURL]/rustdns`
-[LOCKING] 3 packages to latest compatible versions
+[LOCKING] 1 package to latest compatible version
 
 "#]])
         .run();
@@ -1190,7 +1189,7 @@ rustdns.workspace = true
     p.cargo("generate-lockfile")
         .with_stderr_data(str![[r#"
 [UPDATING] git repository `[ROOTURL]/rustdns`
-[LOCKING] 3 packages to latest compatible versions
+[LOCKING] 1 package to latest compatible version
 
 "#]])
         .run();
@@ -1280,7 +1279,7 @@ rustdns.workspace = true
     p.cargo("generate-lockfile")
         .with_stderr_data(str![[r#"
 [UPDATING] git repository `[ROOTURL]/rustdns`
-[LOCKING] 3 packages to latest compatible versions
+[LOCKING] 1 package to latest compatible version
 
 "#]])
         .run();
@@ -1340,7 +1339,7 @@ fn update_precise_git_revisions() {
     p.cargo("fetch")
         .with_stderr_data(str![[r#"
 [UPDATING] git repository `[ROOTURL]/git`
-[LOCKING] 2 packages to latest compatible versions
+[LOCKING] 1 package to latest compatible version
 
 "#]])
         .run();
@@ -1522,7 +1521,7 @@ fn report_behind() {
         .with_stderr_data(str![[r#"
 [UPDATING] `dummy-registry` index
 [LOCKING] 1 package to latest compatible version
-[UPDATING] breaking v0.1.0 -> v0.1.1 (latest: v0.2.0)
+[UPDATING] breaking v0.1.0 -> v0.1.1 (available: v0.2.0)
 [NOTE] pass `--verbose` to see 2 unchanged dependencies behind latest
 [WARNING] not updating lockfile due to dry run
 
@@ -1533,9 +1532,9 @@ fn report_behind() {
         .with_stderr_data(str![[r#"
 [UPDATING] `dummy-registry` index
 [LOCKING] 1 package to latest compatible version
-[UPDATING] breaking v0.1.0 -> v0.1.1 (latest: v0.2.0)
-[UNCHANGED] pre v1.0.0-alpha.0 (latest: v1.0.0-alpha.1)
-[UNCHANGED] two-ver v0.1.0 (latest: v0.2.0)
+[UPDATING] breaking v0.1.0 -> v0.1.1 (available: v0.2.0)
+[UNCHANGED] pre v1.0.0-alpha.0 (available: v1.0.0-alpha.1)
+[UNCHANGED] two-ver v0.1.0 (available: v0.2.0)
 [NOTE] to see how you depend on a package, run `cargo tree --invert --package <dep>@<ver>`
 [WARNING] not updating lockfile due to dry run
 
@@ -1558,9 +1557,9 @@ fn report_behind() {
         .with_stderr_data(str![[r#"
 [UPDATING] `dummy-registry` index
 [LOCKING] 0 packages to latest compatible versions
-[UNCHANGED] breaking v0.1.1 (latest: v0.2.0)
-[UNCHANGED] pre v1.0.0-alpha.0 (latest: v1.0.0-alpha.1)
-[UNCHANGED] two-ver v0.1.0 (latest: v0.2.0)
+[UNCHANGED] breaking v0.1.1 (available: v0.2.0)
+[UNCHANGED] pre v1.0.0-alpha.0 (available: v1.0.0-alpha.1)
+[UNCHANGED] two-ver v0.1.0 (available: v0.2.0)
 [NOTE] to see how you depend on a package, run `cargo tree --invert --package <dep>@<ver>`
 [WARNING] not updating lockfile due to dry run
 
@@ -2008,8 +2007,8 @@ fn update_breaking() {
 [LOCKING] 4 packages to latest compatible versions
 [UPDATING] compatible v1.0.0 -> v1.0.1
 [UPDATING] less-than v1.0.0 -> v2.0.0
-[UPDATING] pinned v1.0.0 -> v1.0.1 (latest: v2.0.0)
-[UPDATING] renamed-from v1.0.0 -> v1.0.1 (latest: v2.0.0)
+[UPDATING] pinned v1.0.0 -> v1.0.1 (available: v2.0.0)
+[UPDATING] renamed-from v1.0.0 -> v1.0.1 (available: v2.0.0)
 
 "#]])
         .run();
@@ -2180,10 +2179,10 @@ fn update_breaking_specific_packages_that_wont_update() {
 [UPDATING] `[..]` index
 [LOCKING] 5 packages to latest compatible versions
 [UPDATING] compatible v1.0.0 -> v1.0.1
-[UPDATING] non-semver v1.0.0 -> v1.0.1 (latest: v2.0.0)
-[UPDATING] renamed-from v1.0.0 -> v1.0.1 (latest: v2.0.0)
+[UPDATING] non-semver v1.0.0 -> v1.0.1 (available: v2.0.0)
+[UPDATING] renamed-from v1.0.0 -> v1.0.1 (available: v2.0.0)
 [UPDATING] transitive-compatible v1.0.0 -> v1.0.1
-[UPDATING] transitive-incompatible v1.0.0 -> v1.0.1 (latest: v2.0.0)
+[UPDATING] transitive-incompatible v1.0.0 -> v1.0.1
 
 "#]])
     .run();
@@ -2222,7 +2221,7 @@ fn update_breaking_without_lock_file() {
         .with_stderr_data(str![[r#"
 [UPDATING] `[..]` index
 [UPGRADING] incompatible ^1.0 -> ^2.0
-[LOCKING] 3 packages to latest compatible versions
+[LOCKING] 2 packages to latest compatible versions
 
 "#]])
         .run();
@@ -2263,7 +2262,10 @@ fn update_breaking_spec_version() {
         .masquerade_as_nightly_cargo(&["update-breaking"])
         .with_status(101)
         .with_stderr_data(str![[r#"
-[ERROR] expected a version like "1.32"
+[ERROR] invalid package ID specification: `incompatible@foo`
+
+Caused by:
+  expected a version like "1.32"
 
 "#]])
         .run();
@@ -2394,7 +2396,7 @@ fn update_breaking_spec_version_transitive() {
         .with_stderr_data(str![[r#"
 [UPDATING] `[..]` index
 [LOCKING] 1 package to latest compatible version
-[UPDATING] dep v1.1.0 -> v1.1.1 (latest: v2.0.0)
+[UPDATING] dep v1.1.0 -> v1.1.1
 
 "#]])
         .run();
@@ -2615,4 +2617,95 @@ fn update_breaking_mixed_pinning_renaming() {
                 mixed-pinned = "=1.0"
             "#]],
     );
+}
+
+#[cargo_test]
+fn update_breaking_pre_release_downgrade() {
+    Package::new("bar", "2.0.0-beta.21").publish();
+
+    let p = project()
+        .file(
+            "Cargo.toml",
+            r#"
+        [package]
+        name  =  "foo"
+        version  =  "0.0.1"
+        edition  =  "2015"
+        authors  =  []
+
+        [dependencies]
+        bar = "2.0.0-beta.21"
+    "#,
+        )
+        .file("src/lib.rs", "")
+        .build();
+
+    p.cargo("generate-lockfile").run();
+
+    // The purpose of this test is
+    // to demonstrate that `update --breaking` will not try to downgrade to the latest stable version (1.7.0),
+    // but will rather keep the latest pre-release (2.0.0-beta.21).
+    Package::new("bar", "1.7.0").publish();
+    p.cargo("update -Zunstable-options --breaking bar")
+        .masquerade_as_nightly_cargo(&["update-breaking"])
+        .with_stderr_data(str![[r#"
+[UPDATING] `dummy-registry` index
+
+"#]])
+        .run();
+}
+
+#[cargo_test]
+fn update_breaking_pre_release_upgrade() {
+    Package::new("bar", "2.0.0-beta.21").publish();
+
+    let p = project()
+        .file(
+            "Cargo.toml",
+            r#"
+        [package]
+        name  =  "foo"
+        version  =  "0.0.1"
+        edition  =  "2015"
+        authors  =  []
+
+        [dependencies]
+        bar = "2.0.0-beta.21"
+    "#,
+        )
+        .file("src/lib.rs", "")
+        .build();
+
+    p.cargo("generate-lockfile").run();
+
+    // TODO: `2.0.0-beta.21` can be upgraded to `2.0.0-beta.22`
+    Package::new("bar", "2.0.0-beta.22").publish();
+    p.cargo("update -Zunstable-options --breaking bar")
+        .masquerade_as_nightly_cargo(&["update-breaking"])
+        .with_stderr_data(str![[r#"
+[UPDATING] `dummy-registry` index
+
+"#]])
+        .run();
+    // TODO: `2.0.0-beta.21` can be upgraded to `2.0.0`
+    Package::new("bar", "2.0.0").publish();
+    p.cargo("update -Zunstable-options --breaking bar")
+        .masquerade_as_nightly_cargo(&["update-breaking"])
+        .with_stderr_data(str![[r#"
+[UPDATING] `dummy-registry` index
+
+"#]])
+        .run();
+
+    Package::new("bar", "3.0.0").publish();
+    p.cargo("update -Zunstable-options --breaking bar")
+        .masquerade_as_nightly_cargo(&["update-breaking"])
+        .with_stderr_data(str![[r#"
+[UPDATING] `dummy-registry` index
+[UPGRADING] bar ^2.0.0-beta.21 -> ^3.0.0
+[LOCKING] 1 package to latest compatible version
+[UPDATING] bar v2.0.0-beta.21 -> v3.0.0
+
+"#]])
+        .run();
 }

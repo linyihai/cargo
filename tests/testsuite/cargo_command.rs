@@ -8,7 +8,6 @@ use std::process::Stdio;
 use std::str;
 
 use cargo_test_support::basic_manifest;
-use cargo_test_support::paths::CargoPathExt;
 use cargo_test_support::prelude::*;
 use cargo_test_support::registry::Package;
 use cargo_test_support::str;
@@ -138,7 +137,7 @@ fn list_command_looks_at_path_case_mismatch() {
     );
 }
 
-#[allow(deprecated)]
+#[expect(deprecated)]
 #[cargo_test]
 fn list_command_handles_known_external_commands() {
     let p = project()
@@ -359,7 +358,6 @@ fn override_cargo_home() {
     assert!(paths::root().join("foo2/.git").is_dir());
 }
 
-#[allow(deprecated)]
 #[cargo_test]
 fn cargo_subcommand_env() {
     let src = format!(
@@ -391,7 +389,7 @@ fn cargo_subcommand_env() {
 
     cargo_process("envtest")
         .env("PATH", &path)
-        .with_stdout(cargo.to_str().unwrap())
+        .with_stdout_data(format!("{}\n", cargo.to_str().unwrap()).raw())
         .run();
 
     // Check that subcommands inherit an overridden $CARGO
@@ -404,7 +402,7 @@ fn cargo_subcommand_env() {
     cargo_process("envtest")
         .env("PATH", &path)
         .env(cargo::CARGO_ENV, &envtest_bin)
-        .with_stdout(envtest_bin)
+        .with_stdout_data(format!("{}\n", envtest_bin).raw().raw())
         .run();
 }
 

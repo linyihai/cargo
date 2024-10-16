@@ -1,6 +1,5 @@
 //! Tests for named profiles.
 
-use cargo_test_support::paths::CargoPathExt;
 use cargo_test_support::prelude::*;
 use cargo_test_support::{basic_lib_manifest, project, str};
 
@@ -327,7 +326,7 @@ fn overrides_with_custom() {
     p.cargo("build -v")
         .with_stderr_data(
             str![[r#"
-[LOCKING] 3 packages to latest compatible versions
+[LOCKING] 2 packages to latest compatible versions
 [COMPILING] xxx v0.5.0 ([ROOT]/foo/xxx)
 [COMPILING] yyy v0.5.0 ([ROOT]/foo/yyy)
 [COMPILING] foo v0.0.1 ([ROOT]/foo)

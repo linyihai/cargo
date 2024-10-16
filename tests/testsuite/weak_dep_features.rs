@@ -2,7 +2,6 @@
 
 use std::fmt::Write;
 
-use cargo_test_support::paths::CargoPathExt;
 use cargo_test_support::prelude::*;
 use cargo_test_support::registry::{Dependency, Package, RegistryBuilder};
 use cargo_test_support::str;
@@ -55,7 +54,7 @@ fn simple() {
     p.cargo("check --features f1")
         .with_stderr_data(str![[r#"
 [UPDATING] `dummy-registry` index
-[LOCKING] 2 packages to latest compatible versions
+[LOCKING] 1 package to latest compatible version
 [DOWNLOADING] crates ...
 [DOWNLOADED] bar v1.0.0 (registry `dummy-registry`)
 [CHECKING] foo v0.1.0 ([ROOT]/foo)
@@ -109,7 +108,7 @@ fn deferred() {
     p.cargo("check")
         .with_stderr_data(str![[r#"
 [UPDATING] `dummy-registry` index
-[LOCKING] 4 packages to latest compatible versions
+[LOCKING] 3 packages to latest compatible versions
 [DOWNLOADING] crates ...
 [DOWNLOADED] dep v1.0.0 (registry `dummy-registry`)
 [DOWNLOADED] bar_activator v1.0.0 (registry `dummy-registry`)
@@ -189,7 +188,7 @@ fn optional_cli_syntax() {
     p.cargo("check --features bar?/feat")
         .with_stderr_data(str![[r#"
 [UPDATING] `dummy-registry` index
-[LOCKING] 2 packages to latest compatible versions
+[LOCKING] 1 package to latest compatible version
 [DOWNLOADING] crates ...
 [DOWNLOADED] bar v1.0.0 (registry `dummy-registry`)
 [CHECKING] foo v0.1.0 ([ROOT]/foo)
@@ -260,7 +259,7 @@ fn required_features() {
         .with_status(101)
         .with_stderr_data(str![[r#"
 [UPDATING] `dummy-registry` index
-[LOCKING] 2 packages to latest compatible versions
+[LOCKING] 1 package to latest compatible version
 [ERROR] invalid feature `bar?/feat` in required-features of target `foo`: optional dependency with `?` is not allowed in required-features
 
 "#]])
@@ -354,7 +353,7 @@ fn weak_with_host_decouple() {
     p.cargo("run")
         .with_stderr_data(str![[r#"
 [UPDATING] `dummy-registry` index
-[LOCKING] 4 packages to latest compatible versions
+[LOCKING] 3 packages to latest compatible versions
 [DOWNLOADING] crates ...
 [DOWNLOADED] common v1.0.0 (registry `dummy-registry`)
 [DOWNLOADED] bar_activator v1.0.0 (registry `dummy-registry`)
@@ -400,7 +399,7 @@ fn weak_namespaced() {
     p.cargo("check --features f1")
         .with_stderr_data(str![[r#"
 [UPDATING] `dummy-registry` index
-[LOCKING] 2 packages to latest compatible versions
+[LOCKING] 1 package to latest compatible version
 [DOWNLOADING] crates ...
 [DOWNLOADED] bar v1.0.0 (registry `dummy-registry`)
 [CHECKING] foo v0.1.0 ([ROOT]/foo)
@@ -631,6 +630,7 @@ edition = "2015"
 name = "foo"
 version = "0.1.0"
 build = false
+autolib = false
 autobins = false
 autoexamples = false
 autotests = false

@@ -15,9 +15,8 @@ cargo-package --- Assemble the local package into a distributable tarball
 ## DESCRIPTION
 
 This command will create a distributable, compressed `.crate` file with the
-source code of the package in the current directory. The resulting file will
-be stored in the `target/package` directory. This performs the following
-steps:
+source code of the package in the current directory. The resulting file will be
+stored in the `target/package` directory. This performs the following steps:
 
 1. Load and check the current workspace, performing some basic checks.
     - Path dependencies are not allowed unless they have a version key. Cargo
@@ -33,6 +32,10 @@ steps:
     - A `.cargo_vcs_info.json` file is included that contains information
       about the current VCS checkout hash if available, as well as a flag if the
       worktree is dirty.
+    - Symlinks are flattened to their target files.
+    - Files and directories are included or excluded based on rules mentioned in
+      [the `[include]` and `[exclude]` fields](../reference/manifest.html#the-exclude-and-include-fields).
+
 3. Extract the `.crate` file and build it to verify it can build.
     - This will rebuild your package from scratch to ensure that it can be
       built from a pristine state. The `--no-verify` flag can be used to skip
@@ -95,6 +98,16 @@ or the license).
 Allow working directories with uncommitted VCS changes to be packaged.
 {{/option}}
 
+{{> options-index }}
+
+{{#option "`--registry` _registry_"}}
+Name of the registry to package for; see `cargo publish --help` for more details
+about configuration of registry names. The packages will not be published
+to this registry, but if we are packaging multiple inter-dependent crates,
+lock-files will be generated under the assumption that dependencies will be
+published to this registry.
+{{/option}}
+
 {{/options}}
 
 {{> section-package-selection }}
@@ -118,6 +131,8 @@ Allow working directories with uncommitted VCS changes to be packaged.
 {{> options-manifest-path }}
 
 {{> options-locked }}
+
+{{> options-lockfile-path }}
 
 {{/options}}
 

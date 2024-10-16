@@ -22,7 +22,10 @@ use crate::core::compiler::{CompileKind, RustcTargetData};
 use crate::core::dependency::DepKind;
 use crate::core::resolver::features::ForceAllTargets;
 use crate::core::resolver::{HasDevUnits, Resolve};
-use crate::core::{Dependency, Manifest, PackageId, PackageIdSpec, SourceId, Target};
+use crate::core::{
+    CliUnstable, Dependency, Features, Manifest, PackageId, PackageIdSpec, SerializedDependency,
+    SourceId, Target,
+};
 use crate::core::{Summary, Workspace};
 use crate::sources::source::{MaybePackage, SourceMap};
 use crate::util::cache_lock::{CacheLock, CacheLockMode};
@@ -73,7 +76,7 @@ pub struct SerializedPackage {
     license_file: Option<String>,
     description: Option<String>,
     source: SourceId,
-    dependencies: Vec<Dependency>,
+    dependencies: Vec<SerializedDependency>,
     targets: Vec<Target>,
     features: BTreeMap<InternedString, Vec<InternedString>>,
     manifest_path: PathBuf,
@@ -188,7 +191,11 @@ impl Package {
         self.targets().iter().any(|t| t.is_example() || t.is_bin())
     }
 
-    pub fn serialized(&self) -> SerializedPackage {
+    pub fn serialized(
+        &self,
+        unstable_flags: &CliUnstable,
+        cargo_features: &Features,
+    ) -> SerializedPackage {
         let summary = self.manifest().summary();
         let package_id = summary.package_id();
         let manmeta = self.manifest().metadata();
@@ -203,7 +210,7 @@ impl Package {
             .cloned()
             .collect();
         // Convert Vec<FeatureValue> to Vec<InternedString>
-        let features = summary
+        let crate_features = summary
             .features()
             .iter()
             .map(|(k, v)| {
@@ -224,9 +231,13 @@ impl Package {
             license_file: manmeta.license_file.clone(),
             description: manmeta.description.clone(),
             source: summary.source_id(),
-            dependencies: summary.dependencies().to_vec(),
+            dependencies: summary
+                .dependencies()
+                .iter()
+                .map(|dep| dep.serialized(unstable_flags, cargo_features))
+                .collect(),
             targets,
-            features,
+            features: crate_features,
             manifest_path: self.manifest_path().to_path_buf(),
             metadata: self.manifest().custom_metadata().cloned(),
             authors: manmeta.authors.clone(),
@@ -393,7 +404,7 @@ impl<'gctx> PackageSet<'gctx> {
         let multiplexing = gctx.http_config()?.multiplexing.unwrap_or(true);
         multi
             .pipelining(false, multiplexing)
-            .with_context(|| "failed to enable multiplexing/pipelining in curl")?;
+            .context("failed to enable multiplexing/pipelining in curl")?;
 
         // let's not flood crates.io with connections
         multi.set_max_host_connections(2)?;
@@ -681,7 +692,7 @@ impl<'a, 'gctx> Downloads<'a, 'gctx> {
             .ok_or_else(|| internal(format!("couldn't find source for `{}`", id)))?;
         let pkg = source
             .download(id)
-            .with_context(|| "unable to get packages from source")?;
+            .context("unable to get packages from source")?;
         let (url, descriptor, authorization) = match pkg {
             MaybePackage::Ready(pkg) => {
                 debug!("{} doesn't need a download", id);
@@ -951,7 +962,7 @@ impl<'a, 'gctx> Downloads<'a, 'gctx> {
                 self.set
                     .multi
                     .perform()
-                    .with_context(|| "failed to perform http requests")
+                    .context("failed to perform http requests")
             })?;
             debug!(target: "network", "handles remaining: {}", n);
             let results = &mut self.results;
@@ -981,7 +992,7 @@ impl<'a, 'gctx> Downloads<'a, 'gctx> {
                 self.set
                     .multi
                     .wait(&mut [], timeout)
-                    .with_context(|| "failed to wait on curl `Multi`")?;
+                    .context("failed to wait on curl `Multi`")?;
             }
         }
     }

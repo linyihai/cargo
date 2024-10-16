@@ -468,34 +468,33 @@ impl SourceId {
 
     /// Creates a new `SourceId` from this source with the given `precise`.
     pub fn with_git_precise(self, fragment: Option<String>) -> SourceId {
-        SourceId::wrap(SourceIdInner {
-            precise: fragment.map(|f| Precise::GitUrlFragment(f)),
-            ..(*self.inner).clone()
-        })
+        self.with_precise(&fragment.map(|f| Precise::GitUrlFragment(f)))
     }
 
     /// Creates a new `SourceId` from this source without a `precise`.
     pub fn without_precise(self) -> SourceId {
-        SourceId::wrap(SourceIdInner {
-            precise: None,
-            ..(*self.inner).clone()
-        })
+        self.with_precise(&None)
     }
 
     /// Creates a new `SourceId` from this source without a `precise`.
     pub fn with_locked_precise(self) -> SourceId {
-        SourceId::wrap(SourceIdInner {
-            precise: Some(Precise::Locked),
-            ..(*self.inner).clone()
-        })
+        self.with_precise(&Some(Precise::Locked))
     }
 
     /// Creates a new `SourceId` from this source with the `precise` from some other `SourceId`.
     pub fn with_precise_from(self, v: Self) -> SourceId {
-        SourceId::wrap(SourceIdInner {
-            precise: v.inner.precise.clone(),
-            ..(*self.inner).clone()
-        })
+        self.with_precise(&v.inner.precise)
+    }
+
+    fn with_precise(self, precise: &Option<Precise>) -> SourceId {
+        if &self.inner.precise == precise {
+            self
+        } else {
+            SourceId::wrap(SourceIdInner {
+                precise: precise.clone(),
+                ..(*self.inner).clone()
+            })
+        }
     }
 
     /// When updating a lock file on a version using `cargo update --precise`
@@ -645,10 +644,7 @@ impl fmt::Display for SourceId {
                 // Don't replace the URL display for git references,
                 // because those are kind of expected to be URLs.
                 write!(f, "{}", self.inner.url)?;
-                // TODO(-Znext-lockfile-bump): set it to true when the default is
-                // lockfile v4, because we want Source ID serialization to be
-                // consistent with lockfile.
-                if let Some(pretty) = reference.pretty_ref(false) {
+                if let Some(pretty) = reference.pretty_ref(true) {
                     write!(f, "?{}", pretty)?;
                 }
 

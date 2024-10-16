@@ -1,7 +1,6 @@
 //! Tests for `-Ztrim-paths`.
 
 use cargo_test_support::basic_manifest;
-use cargo_test_support::compare::assert_e2e;
 use cargo_test_support::git;
 use cargo_test_support::paths;
 use cargo_test_support::prelude::*;
@@ -92,7 +91,7 @@ fn release_profile_default_to_object() {
         .run();
 }
 
-#[allow(deprecated)]
+#[expect(deprecated)]
 #[cargo_test(nightly, reason = "-Zremap-path-scope is unstable")]
 fn one_option() {
     let build = |option| {
@@ -234,7 +233,7 @@ fn registry_dependency() {
 "#]]) // Omit the hash of Source URL
         .with_stderr_data(str![[r#"
 [UPDATING] `dummy-registry` index
-[LOCKING] 2 packages to latest compatible versions
+[LOCKING] 1 package to latest compatible version
 [DOWNLOADING] crates ...
 [DOWNLOADED] bar v0.0.1 (registry `dummy-registry`)
 [COMPILING] bar v0.0.1
@@ -286,7 +285,7 @@ fn git_dependency() {
 "#]]) // Omit the hash of Source URL and commit
         .with_stderr_data(str![[r#"
 [UPDATING] git repository `[ROOTURL]/bar`
-[LOCKING] 2 packages to latest compatible versions
+[LOCKING] 1 package to latest compatible version
 [COMPILING] bar v0.0.1 ([ROOTURL]/bar#[..])
 [RUNNING] `rustc [..]-Zremap-path-scope=object --remap-path-prefix=[ROOT]/home/.cargo/git/checkouts= --remap-path-prefix=[..]/lib/rustlib/src/rust=/rustc/[..]`
 [COMPILING] foo v0.0.1 ([ROOT]/foo)
@@ -331,7 +330,7 @@ cocktail-bar/src/lib.rs
 
 "#]])
         .with_stderr_data(str![[r#"
-[LOCKING] 2 packages to latest compatible versions
+[LOCKING] 1 package to latest compatible version
 [COMPILING] bar v0.0.1 ([ROOT]/foo/cocktail-bar)
 [RUNNING] `rustc [..]-Zremap-path-scope=object --remap-path-prefix=[ROOT]/foo=. --remap-path-prefix=[..]/lib/rustlib/src/rust=/rustc/[..]`
 [COMPILING] foo v0.0.1 ([ROOT]/foo)
@@ -377,7 +376,7 @@ bar-0.0.1/src/lib.rs
 
 "#]])
         .with_stderr_data(str![[r#"
-[LOCKING] 2 packages to latest compatible versions
+[LOCKING] 1 package to latest compatible version
 [COMPILING] bar v0.0.1 ([ROOT]/bar)
 [RUNNING] `rustc [..]-Zremap-path-scope=object --remap-path-prefix=[ROOT]/bar=bar-0.0.1 --remap-path-prefix=[..]/lib/rustlib/src/rust=/rustc/[..]`
 [COMPILING] foo v0.0.1 ([ROOT]/foo)
@@ -389,7 +388,7 @@ bar-0.0.1/src/lib.rs
         .run();
 }
 
-#[allow(deprecated)]
+#[expect(deprecated)]
 #[cargo_test(nightly, reason = "-Zremap-path-scope is unstable")]
 fn diagnostics_works() {
     Package::new("bar", "0.0.1")
@@ -681,6 +680,7 @@ fn custom_build_env_var_trim_paths() {
 #[cfg(unix)]
 #[cargo_test(requires_lldb, nightly, reason = "-Zremap-path-scope is unstable")]
 fn lldb_works_after_trimmed() {
+    use cargo_test_support::compare::assert_e2e;
     use cargo_util::is_ci;
 
     if !is_ci() {
@@ -751,4 +751,91 @@ Hello, Ferris!
 
 "#]],
     );
+}
+
+#[cargo_test(nightly, reason = "rustdoc --remap-path-prefix is unstable")]
+fn rustdoc_without_diagnostics_scope() {
+    Package::new("bar", "0.0.1")
+        .file("Cargo.toml", &basic_manifest("bar", "0.0.1"))
+        .file(
+            "src/lib.rs",
+            r#"
+            /// </script>
+            pub struct Bar;
+            "#,
+        )
+        .publish();
+    let p = project()
+        .file(
+            "Cargo.toml",
+            r#"
+                [package]
+                name = "foo"
+                version = "0.0.1"
+                edition = "2015"
+
+                [dependencies]
+                bar = "0.0.1"
+
+                [profile.dev]
+                trim-paths = "object"
+           "#,
+        )
+        .file("src/lib.rs", "")
+        .build();
+
+    p.cargo("doc -vv -Ztrim-paths")
+        .masquerade_as_nightly_cargo(&["-Ztrim-paths"])
+        .with_stderr_data(str![[r#"
+...
+[WARNING] unopened HTML tag `script`
+ --> [ROOT]/home/.cargo/registry/src/-[HASH]/bar-0.0.1/src/lib.rs:2:17
+...
+"#]])
+        .run();
+}
+
+#[cargo_test(nightly, reason = "rustdoc --remap-path-prefix is unstable")]
+fn rustdoc_diagnostics_works() {
+    // This is expected to work after rust-lang/rust#128736
+    Package::new("bar", "0.0.1")
+        .file("Cargo.toml", &basic_manifest("bar", "0.0.1"))
+        .file(
+            "src/lib.rs",
+            r#"
+            /// </script>
+            pub struct Bar;
+            "#,
+        )
+        .publish();
+    let p = project()
+        .file(
+            "Cargo.toml",
+            r#"
+                [package]
+                name = "foo"
+                version = "0.0.1"
+                edition = "2015"
+
+                [dependencies]
+                bar = "0.0.1"
+
+                [profile.dev]
+                trim-paths = "diagnostics"
+           "#,
+        )
+        .file("src/lib.rs", "")
+        .build();
+
+    p.cargo("doc -vv -Ztrim-paths")
+        .masquerade_as_nightly_cargo(&["-Ztrim-paths"])
+        .with_stderr_data(str![[r#"
+...
+[RUNNING] `[..]rustc [..]-Zremap-path-scope=diagnostics --remap-path-prefix=[ROOT]/home/.cargo/registry/src= --remap-path-prefix=[..]/lib/rustlib/src/rust=/rustc/[..]`
+...
+[WARNING] unopened HTML tag `script`
+ --> -[..]/bar-0.0.1/src/lib.rs:2:17
+...
+"#]])
+        .run();
 }
