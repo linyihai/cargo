@@ -330,7 +330,13 @@ fn rustc(
     if hide_diagnostics_for_scrape_unit {
         output_options.show_diagnostics = false;
     }
-
+    let env_conf: HashSet<String> = build_runner
+        .bcx
+        .gctx
+        .env_config()?
+        .keys()
+        .cloned()
+        .collect();
     return Ok(Work::new(move |state| {
         // Artifacts are in a different location than typical units,
         // hence we must assure the crate- and target-dependent
@@ -451,6 +457,7 @@ fn rustc(
 
         if rustc_dep_info_loc.exists() {
             fingerprint::translate_dep_info(
+                env_conf,
                 &rustc_dep_info_loc,
                 &dep_info_loc,
                 &cwd,

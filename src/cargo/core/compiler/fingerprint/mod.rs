@@ -2125,6 +2125,7 @@ enum DepInfoPathType {
 /// The serialized Cargo format will contain a list of files, all of which are
 /// relative if they're under `root`. or absolute if they're elsewhere.
 pub fn translate_dep_info(
+    env_keys: std::collections::HashSet<String>,
     rustc_dep_info: &Path,
     cargo_dep_info: &Path,
     rustc_cwd: &Path,
@@ -2168,9 +2169,9 @@ pub fn translate_dep_info(
     // This also includes `CARGO` since if the code is explicitly wanting to
     // know that path, it should be rebuilt if it changes. The CARGO path is
     // not tracked elsewhere in the fingerprint.
-    on_disk_info
-        .env
-        .retain(|(key, _)| !rustc_cmd.get_envs().contains_key(key) || key == CARGO_ENV);
+    on_disk_info.env.retain(|(key, _)| {
+        !rustc_cmd.get_envs().contains_key(key) || key == CARGO_ENV || env_keys.contains(key)
+    });
 
     let serialize_path = |file| {
         // The path may be absolute or relative, canonical or not. Make sure
