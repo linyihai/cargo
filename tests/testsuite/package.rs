@@ -628,7 +628,6 @@ fn package_git_submodule() {
         .run();
 }
 
-#[expect(deprecated)]
 #[cargo_test]
 /// Tests if a symlink to a git submodule is properly handled.
 ///
@@ -5312,7 +5311,7 @@ fn workspace_with_local_deps() {
 
 Caused by:
   no matching package named `level2` found
-  location searched: registry `crates-io`
+  location searched: crates.io index
   required by package `level1 v0.0.1 ([ROOT]/foo/level1)`
 
 "#]])
@@ -5496,7 +5495,7 @@ fn workspace_with_local_deps_packaging_one_fails() {
 
 Caused by:
   no matching package named `level2` found
-  location searched: registry `crates-io`
+  location searched: crates.io index
   required by package `level1 v0.0.1 ([ROOT]/foo/target/package/level1-0.0.1)`
 
 "#]])
@@ -5523,7 +5522,7 @@ fn workspace_with_local_deps_packaging_one_fails_nightly() {
 
 Caused by:
   no matching package named `level2` found
-  location searched: registry `crates-io`
+  location searched: crates.io index
   required by package `level1 v0.0.1 ([ROOT]/foo/target/package/level1-0.0.1)`
 
 "#]])
@@ -5589,7 +5588,7 @@ fn workspace_with_local_deps_packaging_one_bin_fails() {
 
 Caused by:
   no matching package named `level2` found
-  location searched: registry `crates-io`
+  location searched: crates.io index
   required by package `level1 v0.0.1 ([ROOT]/foo/level1)`
 
 "#]])
@@ -5809,7 +5808,7 @@ fn workspace_with_local_deps_index_mismatch() {
 
 Caused by:
   no matching package named `level2` found
-  location searched: registry `crates-io`
+  location searched: crates.io index
   required by package `level1 v0.0.1 ([ROOT]/foo/level1)`
 
 "#]])
@@ -6620,7 +6619,7 @@ fn unpublishable_dependency() {
 
 Caused by:
   no matching package named `dep` found
-  location searched: registry `alternative`
+  location searched: `alternative` index
   required by package `main v0.0.1 ([ROOT]/foo/main)`
 
 "#]])

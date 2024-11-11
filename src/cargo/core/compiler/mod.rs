@@ -91,6 +91,7 @@ pub use crate::core::compiler::unit::{Unit, UnitInterner};
 use crate::core::manifest::TargetSourcePath;
 use crate::core::profiles::{PanicStrategy, Profile, StripInner};
 use crate::core::{Feature, PackageId, Target, Verbosity};
+use crate::util::context::WarningHandling;
 use crate::util::errors::{CargoResult, VerboseError};
 use crate::util::interning::InternedString;
 use crate::util::machine_message::{self, Message};
@@ -202,13 +203,15 @@ fn compile<'gctx>(
         } else {
             // We always replay the output cache,
             // since it might contain future-incompat-report messages
+            let show_diagnostics = unit.show_warnings(bcx.gctx)
+                && build_runner.bcx.gctx.warning_handling()? != WarningHandling::Allow;
             let work = replay_output_cache(
                 unit.pkg.package_id(),
                 PathBuf::from(unit.pkg.manifest_path()),
                 &unit.target,
                 build_runner.files().message_cache_path(unit),
                 build_runner.bcx.build_config.message_format,
-                unit.show_warnings(bcx.gctx),
+                show_diagnostics,
             );
             // Need to link targets on both the dirty and fresh.
             work.then(link_targets(build_runner, unit, true)?)
@@ -330,7 +333,7 @@ fn rustc(
     if hide_diagnostics_for_scrape_unit {
         output_options.show_diagnostics = false;
     }
-
+    let env_config = Arc::clone(build_runner.bcx.gctx.env_config()?);
     return Ok(Work::new(move |state| {
         // Artifacts are in a different location than typical units,
         // hence we must assure the crate- and target-dependent
@@ -459,6 +462,7 @@ fn rustc(
                 &rustc,
                 // Do not track source files in the fingerprint for registry dependencies.
                 is_local,
+                &env_config,
             )
             .with_context(|| {
                 internal(format!(
@@ -715,16 +719,6 @@ fn prepare_rustc(build_runner: &BuildRunner<'_, '_>, unit: &Unit) -> CargoResult
     if unit.target.is_test() || unit.target.is_bench() {
         let tmp = build_runner.files().layout(unit.kind).prepare_tmp()?;
         base.env("CARGO_TARGET_TMPDIR", tmp.display().to_string());
-    }
-    if build_runner.bcx.gctx.nightly_features_allowed {
-        // This must come after `build_base_args` (which calls `add_path_args`) so that the `cwd`
-        // is set correctly.
-        base.env(
-            "CARGO_RUSTC_CURRENT_DIR",
-            base.get_cwd()
-                .map(|c| c.display().to_string())
-                .unwrap_or(String::new()),
-        );
     }
 
     Ok(base)
@@ -1657,10 +1651,12 @@ impl OutputOptions {
         // Remove old cache, ignore ENOENT, which is the common case.
         drop(fs::remove_file(&path));
         let cache_cell = Some((path, LazyCell::new()));
+        let show_diagnostics =
+            build_runner.bcx.gctx.warning_handling().unwrap_or_default() != WarningHandling::Allow;
         OutputOptions {
             format: build_runner.bcx.build_config.message_format,
             cache_cell,
-            show_diagnostics: true,
+            show_diagnostics,
             warnings_seen: 0,
             errors_seen: 0,
         }
@@ -1987,10 +1983,7 @@ pub(crate) fn apply_env_config(
         if cmd.get_envs().contains_key(key) {
             continue;
         }
-
-        if value.is_force() || gctx.get_env_os(key).is_none() {
-            cmd.env(key, value.resolve(gctx));
-        }
+        cmd.env(key, value);
     }
     Ok(())
 }

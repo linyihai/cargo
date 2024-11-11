@@ -11,7 +11,7 @@ exclude = [
 ]
 
 [workspace.package]
-rust-version = "1.78"  # MSRV:3
+rust-version = "1.79"  # MSRV:3
 edition = "2021"
 license = "MIT OR Apache-2.0"
 homepage = "https://github.com/rust-lang/cargo"
@@ -36,8 +36,8 @@ cargo-test-support = { version = "0.6.0", path = "crates/cargo-test-support" }
 cargo-util = { version = "0.2.14", path = "crates/cargo-util" }
 cargo-util-schemas = { version = "0.7.0", path = "crates/cargo-util-schemas" }
 cargo_metadata = "0.18.1"
-clap = "4.5.18"
-clap_complete = { version = "4.5.32", features = ["unstable-dynamic"] }
+clap = "4.5.20"
+clap_complete = { version = "4.5.35", features = ["unstable-dynamic"] }
 color-print = "0.3.6"
 core-foundation = { version = "0.10.0", features = ["mac_os_10_7_support"] }
 crates-io = { version = "0.40.4", path = "crates/crates-io" }
@@ -48,9 +48,9 @@ filetime = "0.2.23"
 flate2 = { version = "1.0.30", default-features = false, features = ["zlib"] }
 git2 = "0.19.0"
 git2-curl = "0.20.0"
-gix = { version = "0.64.0", default-features = false, features = ["blocking-http-transport-curl", "progress-tree", "parallel", "dirwalk"] }
+gix = { version = "0.67.0", default-features = false, features = ["blocking-http-transport-curl", "progress-tree", "parallel", "dirwalk"] }
 glob = "0.3.1"
-handlebars = { version = "5.1.2", features = ["dir_source"] }
+handlebars = { version = "6.0.0", features = ["dir_source"] }
 hex = "0.4.3"
 hmac = "0.12.1"
 home = "0.5.9"
@@ -81,9 +81,10 @@ rand = "0.8.5"
 regex = "1.10.5"
 rusqlite = { version = "0.32.0", features = ["bundled"] }
 rustc-hash = "2.0.0"
-rustfix = { version = "0.8.2", path = "crates/rustfix" }
+rustfix = { version = "0.9.0", path = "crates/rustfix" }
 same-file = "1.0.6"
-security-framework = "2.11.1"
+schemars = "0.8.21"
+security-framework = "3.0.0"
 semver = { version = "1.0.23", features = ["serde"] }
 serde = "1.0.204"
 serde-untagged = "0.1.6"
@@ -95,7 +96,7 @@ sha2 = "0.10.8"
 shell-escape = "0.1.5"
 similar = "2.6.0"
 supports-hyperlinks = "3.0.0"
-snapbox = { version = "0.6.18", features = ["diff", "dir", "term-svg", "regex", "json"] }
+snapbox = { version = "0.6.20", features = ["diff", "dir", "term-svg", "regex", "json"] }
 tar = { version = "0.4.42", default-features = false }
 tempfile = "3.10.1"
 thiserror = "1.0.63"
@@ -132,7 +133,7 @@ name = "cargo"
 version = "0.85.0"
 edition.workspace = true
 license.workspace = true
-rust-version = "1.81"  # MSRV:1
+rust-version = "1.82"  # MSRV:1
 homepage = "https://doc.rust-lang.org/cargo/index.html"
 repository.workspace = true
 documentation = "https://docs.rs/cargo"

@@ -150,6 +150,25 @@ fn duplicate_version() {
         .file("src/main.rs", "fn main() {}")
         .build();
 
+    p.cargo("publish --dry-run")
+        .replace_crates_io(registry_dupl.index_url())
+        .with_stderr_data(str![[r#"
+[UPDATING] crates.io index
+[WARNING] crate foo@0.0.1 already exists on crates.io index
+[WARNING] manifest has no documentation, homepage or repository.
+See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[PACKAGING] foo v0.0.1 ([ROOT]/foo)
+[PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
+[VERIFYING] foo v0.0.1 ([ROOT]/foo)
+[WARNING] no edition set: defaulting to the 2015 edition while the latest is 2021
+[COMPILING] foo v0.0.1 ([ROOT]/foo/target/package/foo-0.0.1)
+[FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
+[UPLOADING] foo v0.0.1 ([ROOT]/foo)
+[WARNING] aborting upload due to dry run
+
+"#]])
+        .run();
+
     p.cargo("publish")
         .replace_crates_io(registry_dupl.index_url())
         .with_status(101)
@@ -1366,7 +1385,6 @@ You may press ctrl-c to skip waiting; the crate should be available shortly.
     );
 }
 
-#[expect(deprecated)]
 #[cargo_test]
 fn publish_checks_for_token_before_verify() {
     let registry = registry::RegistryBuilder::new()
@@ -3932,7 +3950,7 @@ fn workspace_missing_dependency() {
 
 Caused by:
   no matching package named `a` found
-  location searched: registry `crates-io`
+  location searched: crates.io index
   required by package `b v0.0.1 ([ROOT]/foo/target/package/b-0.0.1)`
 
 "#]])
