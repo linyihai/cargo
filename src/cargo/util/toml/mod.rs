@@ -1482,7 +1482,7 @@ pub fn to_real_manifest(
                 warnings.push(format!(
                     "file `{}` found to be present in multiple \
                  build targets:\n{}",
-                    target_path.display().to_string(),
+                    target_path.display(),
                     conflicts
                         .iter()
                         .map(|t| format!("  * `{}` target `{}`", t.kind().description(), t.name(),))
@@ -1697,7 +1697,7 @@ pub fn to_real_manifest(
                 .iter()
                 .map(|(k, v)| {
                     (
-                        InternedString::new(k),
+                        k.to_string().into(),
                         v.iter().map(InternedString::from).collect(),
                     )
                 })
@@ -1986,7 +1986,7 @@ fn validate_dependencies(
             None => "dependencies",
         };
         let table_in_toml = if let Some(platform) = platform {
-            format!("target.{}.{kind_name}", platform.to_string())
+            format!("target.{platform}.{kind_name}")
         } else {
             kind_name.to_string()
         };
@@ -3090,7 +3090,7 @@ fn prepare_toml_for_publish(
 
         features.values_mut().for_each(|feature_deps| {
             feature_deps.retain(|feature_dep| {
-                let feature_value = FeatureValue::new(InternedString::new(feature_dep));
+                let feature_value = FeatureValue::new(feature_dep.into());
                 match feature_value {
                     FeatureValue::Dep { dep_name } | FeatureValue::DepFeature { dep_name, .. } => {
                         let k = &manifest::PackageName::new(dep_name.to_string()).unwrap();
